@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { classController } from '../controllers';
-import { validate, classValidationRules } from '../middleware';
 
 const router = Router();
 
@@ -30,7 +29,7 @@ router.get('/:id', classController.getClassById.bind(classController));
  * POST /api/classes
  * Create a new class
  */
-router.post('/', classValidationRules, validate, classController.createClass.bind(classController));
+router.post('/', classController.createClass.bind(classController));
 
 /**
  * PUT /api/classes/:id

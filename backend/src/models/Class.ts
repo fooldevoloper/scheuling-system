@@ -21,6 +21,8 @@ export interface RecurrenceConfig {
     endDate?: Date;
     occurrences?: number; // Max occurrences
     customRules?: string; // RRule compatible string
+    exclusionDates?: string[]; // Specific dates to exclude (YYYY-MM-DD format)
+    excludeWeekends?: boolean; // Whether to exclude Saturdays and Sundays
 }
 
 export interface GeneratedInstance {
@@ -159,6 +161,14 @@ const ClassSchema = new Schema<IClass>(
             },
             customRules: {
                 type: String,
+            },
+            exclusionDates: [{
+                type: String,
+                match: [/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'],
+            }],
+            excludeWeekends: {
+                type: Boolean,
+                default: false,
             },
         },
 

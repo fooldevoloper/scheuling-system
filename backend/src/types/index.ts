@@ -53,6 +53,8 @@ export interface RecurrenceConfig {
     endDate?: Date;
     occurrences?: number; // Max occurrences
     customRules?: string; // RRule compatible string
+    exclusionDates?: string[]; // Dates to exclude (YYYY-MM-DD format)
+    excludeWeekends?: boolean; // Whether to exclude weekends
 }
 
 export interface CreateClassDTO {

@@ -69,7 +69,6 @@ const InstructorSchema = new Schema<IInstructor>(
 // Indexes
 InstructorSchema.index({ firstName: 'text', lastName: 'text', email: 'text' });
 InstructorSchema.index({ isActive: 1 });
-InstructorSchema.index({ email: 1 }, { unique: true });
 InstructorSchema.index({ specialization: 1 });
 
 // Virtual for full name

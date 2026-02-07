@@ -238,8 +238,8 @@ export class ClassRepository {
                 }
                 calendarData[dateKey].push(cls);
             } else {
-                // Recurring class - generate instances and add to each date
-                const instances = this.generateClassInstances(cls, start, end);
+                // Recurring class - generate instances for each day in range
+                const instances = this.generateRecurringInstances(cls, start, end);
                 for (const instance of instances) {
                     const dateKey = instance.date.toISOString().split('T')[0];
                     if (!calendarData[dateKey]) {
@@ -262,11 +262,12 @@ export class ClassRepository {
 
     /**
      * Generate instances for a recurring class within a date range
+     * Supports daily, weekly, monthly patterns with exclusion days
      */
-    private generateClassInstances(
+    private generateRecurringInstances(
         cls: IClass,
-        startDate: Date,
-        endDate: Date
+        queryStart: Date,
+        queryEnd: Date
     ): { date: Date; startTime: string; endTime: string }[] {
         const instances: { date: Date; startTime: string; endTime: string }[] = [];
 
@@ -275,68 +276,120 @@ export class ClassRepository {
         const pattern = cls.recurrence.pattern;
         const timeSlots = cls.recurrence.timeSlots || [{ startTime: cls.startTime, endTime: cls.endTime }];
         const interval = cls.recurrence.interval || 1;
-        const end = cls.recurrence.endDate || endDate;
 
-        let currentDate = new Date(startDate);
+        // Class start date (when the recurring class begins)
+        const classStartDate = new Date(cls.startDate);
+        // When to stop generating (either class end date or query end date)
+        const classEndDate = cls.recurrence.endDate ? new Date(cls.recurrence.endDate) : queryEnd;
+        const effectiveEnd = classEndDate < queryEnd ? classEndDate : queryEnd;
 
-        while (currentDate <= end && currentDate <= endDate) {
-            const shouldInclude = this.checkRecurrenceMatch(cls.recurrence!, currentDate);
+        // Exclusion dates (holidays, etc.) - parse from string format
+        const exclusionDates = cls.recurrence.exclusionDates || [];
 
-            if (shouldInclude) {
+        // Whether to exclude weekends
+        const excludeWeekends = cls.recurrence.excludeWeekends || false;
+
+        // Start from the later of class start date and query start date
+        let currentDate = new Date(classStartDate > queryStart ? classStartDate : queryStart);
+
+        // Normalize to start of day for comparison
+        const queryStartNormalized = new Date(queryStart);
+        queryStartNormalized.setHours(0, 0, 0, 0);
+
+        const queryEndNormalized = new Date(queryEnd);
+        queryEndNormalized.setHours(23, 59, 59, 999);
+
+        while (currentDate <= effectiveEnd && currentDate <= queryEndNormalized) {
+            // Normalize current date
+            const currentNormalized = new Date(currentDate);
+            currentNormalized.setHours(0, 0, 0, 0);
+
+            // Check if date should be excluded
+            const shouldExclude = this.shouldExcludeDate(
+                currentDate,
+                classStartDate,
+                exclusionDates,
+                excludeWeekends,
+                pattern,
+                cls.recurrence
+            );
+
+            if (!shouldExclude) {
                 for (const slot of timeSlots) {
+                    const instanceDate = new Date(currentDate);
                     instances.push({
-                        date: new Date(currentDate),
+                        date: instanceDate,
                         startTime: slot.startTime,
                         endTime: slot.endTime
                     });
                 }
             }
 
-            // Move to next date based on pattern
-            switch (pattern) {
-                case 'daily':
-                    currentDate.setDate(currentDate.getDate() + interval);
-                    break;
-                case 'weekly':
-                    currentDate.setDate(currentDate.getDate() + 7 * interval);
-                    break;
-                case 'monthly':
-                    currentDate.setMonth(currentDate.getMonth() + interval);
-                    break;
-                default:
-                    currentDate.setDate(currentDate.getDate() + 1);
-            }
+            // Move to next day (we check every day for proper pattern matching)
+            currentDate.setDate(currentDate.getDate() + 1);
         }
 
         return instances;
     }
 
     /**
-     * Check if a date matches the recurrence pattern
+     * Check if a date should be excluded from the schedule
      */
-    private checkRecurrenceMatch(
-        recurrence: NonNullable<IClass['recurrence']>,
-        date: Date
+    private shouldExcludeDate(
+        date: Date,
+        classStartDate: Date,
+        exclusionDates: string[],
+        excludeWeekends: boolean,
+        pattern: string,
+        recurrence: NonNullable<IClass['recurrence']>
     ): boolean {
-        switch (recurrence.pattern) {
-            case 'daily':
+        const dateStr = date.toISOString().split('T')[0];
+
+        // Check exclusion dates list
+        if (exclusionDates.includes(dateStr)) {
+            return true;
+        }
+
+        // Check weekend exclusion
+        if (excludeWeekends) {
+            const dayOfWeek = date.getDay();
+            if (dayOfWeek === 0 || dayOfWeek === 6) { // Sunday or Saturday
                 return true;
+            }
+        }
+
+        // Check pattern-specific rules
+        switch (pattern) {
+            case 'daily':
+                // Check interval
+                const dailyInterval = recurrence.interval || 1;
+                const daysFromStart = Math.floor((date.getTime() - classStartDate.getTime()) / (1000 * 60 * 60 * 24));
+                return daysFromStart % dailyInterval !== 0;
 
             case 'weekly':
-                if (recurrence.daysOfWeek) {
+                // Check if day of week matches
+                if (recurrence.daysOfWeek && recurrence.daysOfWeek.length > 0) {
                     const dayOfWeek = date.getDay() as DayOfWeek;
-                    return recurrence.daysOfWeek.includes(dayOfWeek);
+                    return !recurrence.daysOfWeek.includes(dayOfWeek);
                 }
-                return false;
+                return true; // No days specified, exclude all
 
             case 'monthly':
-                if (recurrence.dayOfMonth) {
-                    return recurrence.dayOfMonth.includes(date.getDate());
+                // Check if day of month matches
+                if (recurrence.dayOfMonth && recurrence.dayOfMonth.length > 0) {
+                    return !recurrence.dayOfMonth.includes(date.getDate());
                 }
-                return false;
+                return true; // No days specified, exclude all
 
             case 'custom':
-                return true;
+                // Custom pattern - check both days of week and days of month
+                // If either is specified, the date must match at least one
+                const customDayOfWeek = date.getDay() as DayOfWeek;
+                const matchesCustomDayOfWeek = !recurrence.daysOfWeek || recurrence.daysOfWeek.length === 0 || recurrence.daysOfWeek.includes(customDayOfWeek);
+                const matchesCustomDayOfMonth = !recurrence.dayOfMonth || recurrence.dayOfMonth.length === 0 || recurrence.dayOfMonth.includes(date.getDate());
+
+                // For custom pattern, date is included if it matches both day of week AND day of month criteria
+                return !(matchesCustomDayOfWeek && matchesCustomDayOfMonth);
 
             default:
                 return false;
