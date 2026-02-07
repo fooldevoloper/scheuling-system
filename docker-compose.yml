@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: plex-bit-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: plex-bit
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - plex-bit-network
+
+  redis:
+    image: redis:alpine
+    container_name: plex-bit-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - plex-bit-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  plex-bit-network:
+    driver: bridge
