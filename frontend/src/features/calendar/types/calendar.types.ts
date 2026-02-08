@@ -1,4 +1,4 @@
-export type CalendarView = 'month';
+export type CalendarView = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay' | 'listWeek';
 
 export interface CalendarEvent {
     id: string;
@@ -10,6 +10,7 @@ export interface CalendarEvent {
     instructor?: string;
     courseCode?: string;
     classType: string;
+    status?: string;
 }
 
 export interface CalendarData extends Record<string, unknown[]> { }

@@ -18,6 +18,7 @@ interface RawCalendarEvent {
     instructor?: { firstName?: string; lastName?: string; fullName?: string };
     courseCode?: string;
     classType?: string;
+    status?: string;
 }
 
 const transformToCalendarEvents = (data: Record<string, unknown[]>): Record<string, CalendarEvent[]> => {
@@ -38,6 +39,7 @@ const transformToCalendarEvents = (data: Record<string, unknown[]>): Record<stri
                     instructor: e.instructor?.fullName || (e.instructor ? `${e.instructor.firstName} ${e.instructor.lastName}` : undefined),
                     courseCode: e.courseCode,
                     classType: e.classType || 'single',
+                    status: e.status,
                 };
             });
         }
@@ -47,9 +49,16 @@ const transformToCalendarEvents = (data: Record<string, unknown[]>): Record<stri
 };
 
 export const useCalendarData = (params: CalendarQueryParams) => {
-    const { data, isLoading, error } = useQuery({
-        queryKey: ['calendar', params],
+    // Create a unique query key based on date range
+    const queryKey = ['calendar', params.startDate, params.endDate];
+
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
+        queryKey,
         queryFn: () => calendarApi.getCalendarData(params),
+        staleTime: 0, // Always fetch fresh data when navigating
+        gcTime: 5 * 60 * 1000, // Cache for 5 minutes
+        refetchOnWindowFocus: true,
+        enabled: !!params.startDate && !!params.endDate,
     });
 
     const eventsMap = useMemo(() => {
@@ -62,7 +71,7 @@ export const useCalendarData = (params: CalendarQueryParams) => {
         return eventsMap[dateKey] || [];
     }, [eventsMap]);
 
-    const getMonthStats = useCallback(() => {
+    const getViewStats = useCallback(() => {
         const events: CalendarEvent[] = [];
         Object.values(eventsMap).forEach(dayEvents => {
             events.push(...dayEvents);
@@ -73,12 +82,19 @@ export const useCalendarData = (params: CalendarQueryParams) => {
         };
     }, [eventsMap]);
 
+    const getMonthStats = useCallback(() => {
+        return getViewStats();
+    }, [getViewStats]);
+
     return {
         calendarData: data,
         isLoading,
+        isFetching,
         error,
+        refetch,
         eventsMap,
         getEventsForDay,
+        getViewStats,
         getMonthStats,
     };
 };
