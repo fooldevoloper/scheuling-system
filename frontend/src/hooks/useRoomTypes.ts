@@ -23,6 +23,7 @@ export const useCreateRoomType = () => {
         mutationFn: (data: RoomTypeFormData) => roomTypeApi.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.roomTypes.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.rooms.all });
         },
     });
 };
@@ -34,6 +35,7 @@ export const useUpdateRoomType = () => {
             roomTypeApi.update(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.roomTypes.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.rooms.all });
         },
     });
 };
@@ -44,6 +46,7 @@ export const useDeleteRoomType = () => {
         mutationFn: (id: string) => roomTypeApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.roomTypes.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.rooms.all });
         },
     });
 };

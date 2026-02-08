@@ -1,26 +1,37 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from './config';
 import { connectDatabase } from './config/database';
 import { connectRedis } from './config/redis';
-import { cacheService } from './services';
+import { cacheService } from './modules/cache';
 import routes from './routes';
-import { errorHandler, notFoundHandler } from './middleware';
+import { errorHandler, notFoundHandler } from './shared/middlewares/errorHandler';
+
 const app = express();
+
+// Security middleware
 app.use(helmet());
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Logging
 if (config.nodeEnv === 'development') {
     app.use(morgan('dev'));
 }
+
+// Routes
 app.use('/api', routes);
+
+// Root endpoint
 app.get('/', (req: Request, res: Response) => {
     res.json({
         title: 'Plex-Bit API',
@@ -29,6 +40,8 @@ app.get('/', (req: Request, res: Response) => {
         documentation: '/api/docs'
     });
 });
+
+// Health check
 app.get('/health', (req: Request, res: Response) => {
     res.json({
         title: 'Health Check',
@@ -37,12 +50,17 @@ app.get('/health', (req: Request, res: Response) => {
         environment: config.nodeEnv
     });
 });
+
+// Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+// Server startup
 const startServer = async (): Promise<void> => {
     try {
         await connectDatabase();
         console.log('✅ MongoDB connected');
+
         await connectRedis();
         await cacheService.initialize();
         console.log('✅ Redis initialized');
@@ -60,8 +78,10 @@ const startServer = async (): Promise<void> => {
 ║   Environment: ${config.nodeEnv.padEnd(35)}║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
-      `);
+            `);
         });
+
+        // Graceful shutdown
         const gracefulShutdown = async (signal: string) => {
             console.log(`\n${signal} received. Shutting down gracefully...`);
             server.close(async () => {
@@ -78,6 +98,7 @@ const startServer = async (): Promise<void> => {
                 process.exit(1);
             }, 10000);
         };
+
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
@@ -86,5 +107,8 @@ const startServer = async (): Promise<void> => {
         process.exit(1);
     }
 };
+
 startServer();
+
 export default app;
+

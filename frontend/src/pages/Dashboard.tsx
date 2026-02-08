@@ -73,7 +73,7 @@ export function DashboardPage() {
                 instructor: e.instructor,
                 courseCode: e.courseCode,
                 classType: e.classType,
-                status: e.status,
+                status: e.classType,
             };
         });
     }, [calendarData, todayStr]);
@@ -258,10 +258,10 @@ export function DashboardPage() {
                                                     </div>
                                                 </div>
                                                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${cls.status === 'scheduled' ? 'bg-gray-100 text-gray-600' :
-                                                        cls.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                            'bg-yellow-100 text-yellow-700'
+                                                    cls.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                        'bg-yellow-100 text-yellow-700'
                                                     }`}>
-                                                    {cls.status?.charAt(0).toUpperCase() + (cls.status?.slice(1) || '')}
+                                                    {cls.status ? cls.status.charAt(0).toUpperCase() + cls.status.slice(1) : 'Unknown'}
                                                 </span>
                                             </div>
                                         </div>
@@ -326,7 +326,8 @@ export function DashboardPage() {
                         </div>
                     </div>
                 </>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }

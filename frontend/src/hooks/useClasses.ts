@@ -30,6 +30,8 @@ export const useCreateClass = () => {
         mutationFn: (data: unknown) => classApi.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.classes.calendar() });
+            queryClient.invalidateQueries({ queryKey: queryKeys.instructors.all });
         },
     });
 };
@@ -41,6 +43,7 @@ export const useUpdateClass = () => {
             classApi.update(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.instructors.all });
         },
     });
 };
@@ -51,6 +54,7 @@ export const useDeleteClass = () => {
         mutationFn: (id: string) => classApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.instructors.all });
         },
     });
 };

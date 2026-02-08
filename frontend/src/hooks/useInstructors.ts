@@ -23,6 +23,7 @@ export const useCreateInstructor = () => {
         mutationFn: (data: InstructorFormData) => instructorApi.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.instructors.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
         },
     });
 };
@@ -34,6 +35,7 @@ export const useUpdateInstructor = () => {
             instructorApi.update(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.instructors.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
         },
     });
 };
@@ -44,6 +46,7 @@ export const useDeleteInstructor = () => {
         mutationFn: (id: string) => instructorApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.instructors.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
         },
     });
 };

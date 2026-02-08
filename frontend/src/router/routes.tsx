@@ -9,7 +9,7 @@ import { ClassesPage } from '@/pages/Classes';
 import { ClassDetailPage } from '@/pages/ClassDetail';
 import { EditClassPage } from '@/pages/EditClass';
 import { CreateClassPage } from '@/pages/CreateClass';
-import { CalendarPage } from '@/pages/Calendar';
+import { CalendarPage } from '@/features/calendar';
 import { RoomTypesPage } from '@/pages/RoomTypes';
 import { RoomsPage } from '@/pages/Rooms';
 import { InstructorsPage } from '@/pages/Instructors';
