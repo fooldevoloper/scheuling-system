@@ -84,7 +84,10 @@ export class CacheService {
         try {
             const keys = await this.client.keys(pattern);
             if (keys.length > 0) {
+                console.log(`Cache: Deleting ${keys.length} keys matching pattern "${pattern}"`);
                 await this.client.del(...keys);
+            } else {
+                console.log(`Cache: No keys found matching pattern "${pattern}"`);
             }
         } catch (error) {
             console.error('Cache deleteByPattern error:', error);
@@ -111,8 +114,15 @@ export class CacheService {
      * Invalidate all class-related cache
      */
     async invalidateClasses(): Promise<void> {
-        await this.deleteByPattern('schedule:classes*');
-        await this.deleteByPattern('schedule:calendar*');
+        await this.deleteByPattern('schedule:classes:*');
+        await this.deleteByPattern('schedule:calendar:*');
+    }
+
+    /**
+     * Invalidate all calendar cache
+     */
+    async invalidateCalendar(): Promise<void> {
+        await this.deleteByPattern('schedule:calendar:*');
     }
 
     /**

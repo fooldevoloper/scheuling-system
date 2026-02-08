@@ -1,12 +1,7 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, X, Check, Building2 } from 'lucide-react';
-
-interface RoomTypeFormData {
-    name: string;
-    capacity: number;
-    description: string;
-    amenities: string[];
-}
+import { Plus, Edit, Trash2, X, Check, Building2, Loader2 } from 'lucide-react';
+import { useRoomTypes, useCreateRoomType, useUpdateRoomType, useDeleteRoomType } from '@/hooks';
+import type { RoomType, RoomTypeFormData } from '@/types';
 
 const initialFormData: RoomTypeFormData = {
     name: '',
@@ -19,36 +14,42 @@ export function RoomTypesPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<RoomTypeFormData>(initialFormData);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [amenityInput, setAmenityInput] = useState('');
 
-    // Sample data
-    const [roomTypes, setRoomTypes] = useState([
-        { _id: '1', name: 'Lecture Hall', capacity: 100, description: 'Large hall for lectures', amenities: ['Projector', 'Whiteboard', 'Microphone'], isActive: true },
-        { _id: '2', name: 'Laboratory', capacity: 30, description: 'Lab with computers', amenities: ['Computers', 'Lab Equipment'], isActive: true },
-        { _id: '3', name: 'Studio', capacity: 20, description: 'Recording studio', amenities: ['Recording Equipment'], isActive: true },
-        { _id: '4', name: 'Conference Room', capacity: 15, description: 'Meeting room', amenities: ['Video Conferencing', 'Whiteboard'], isActive: true },
-    ]);
+    const { data: roomTypesData, isLoading, error } = useRoomTypes();
+    const createRoomType = useCreateRoomType();
+    const updateRoomType = useUpdateRoomType();
+    const deleteRoomType = useDeleteRoomType();
+
+    const roomTypes: RoomType[] = ((roomTypesData?.data?.data || []) as unknown) as RoomType[];
 
     const openCreateModal = () => {
         setIsEditing(false);
         setFormData(initialFormData);
+        setEditingId(null);
+        setAmenityInput('');
         setIsModalOpen(true);
     };
 
-    const openEditModal = (roomType: typeof roomTypes[0]) => {
+    const openEditModal = (roomType: RoomType) => {
         setIsEditing(true);
         setFormData({
             name: roomType.name,
             capacity: roomType.capacity,
-            description: roomType.description,
+            description: roomType.description || '',
             amenities: [...roomType.amenities],
         });
+        setEditingId(roomType._id);
+        setAmenityInput('');
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setFormData(initialFormData);
+        setEditingId(null);
+        setAmenityInput('');
     };
 
     const addAmenity = () => {
@@ -68,29 +69,27 @@ export function RoomTypesPage() {
         });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (isEditing) {
-            // Update existing
-            const updated = roomTypes.map(rt =>
-                rt._id === roomTypes[0]._id ? { ...rt, ...formData } : rt
-            );
-            setRoomTypes(updated);
-        } else {
-            // Create new
-            const newRoomType = {
-                _id: Date.now().toString(),
-                ...formData,
-                isActive: true,
-            };
-            setRoomTypes([...roomTypes, newRoomType]);
+        try {
+            if (isEditing && editingId) {
+                await updateRoomType.mutateAsync({ id: editingId, data: formData });
+            } else {
+                await createRoomType.mutateAsync(formData);
+            }
+            closeModal();
+        } catch (error) {
+            console.error('Failed to save room type:', error);
         }
-        closeModal();
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Are you sure you want to delete this room type?')) {
-            setRoomTypes(roomTypes.filter(rt => rt._id !== id));
+            try {
+                await deleteRoomType.mutateAsync(id);
+            } catch (error) {
+                console.error('Failed to delete room type:', error);
+            }
         }
     };
 
@@ -107,45 +106,71 @@ export function RoomTypesPage() {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {roomTypes.map((type) => (
-                    <div key={type._id} className="card p-6 hover:shadow-md transition-shadow">
-                        <div className="flex items-start justify-between">
-                            <div className="flex items-center space-x-3">
-                                <div className="p-2 bg-primary-100 rounded-lg">
-                                    <Building2 className="w-5 h-5 text-primary-600" />
+            {/* Loading State */}
+            {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+                </div>
+            ) : error ? (
+                <div className="card p-8 text-center text-red-500">
+                    Failed to load room types. Please try again.
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {roomTypes.map((type) => (
+                        <div key={type._id} className="card p-6 hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-primary-100 rounded-lg">
+                                        <Building2 className="w-5 h-5 text-primary-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-gray-900">{type.name}</h3>
+                                        <p className="text-sm text-gray-500">Capacity: {type.capacity}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-semibold text-gray-900">{type.name}</h3>
-                                    <p className="text-sm text-gray-500">Capacity: {type.capacity}</p>
+                                <div className="flex items-center space-x-1">
+                                    <button
+                                        onClick={() => openEditModal(type)}
+                                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(type._id)}
+                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
-                            <div className="flex items-center space-x-1">
-                                <button
-                                    onClick={() => openEditModal(type)}
-                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                                >
-                                    <Edit className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(type._id)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
+                            {type.description && (
+                                <p className="text-sm text-gray-600 mt-3">{type.description}</p>
+                            )}
+                            {type.amenities && type.amenities.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-3">
+                                    {type.amenities.map((amenity, i) => (
+                                        <span key={i} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                                            {amenity}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                        <p className="text-sm text-gray-600 mt-3">{type.description}</p>
-                        <div className="flex flex-wrap gap-1 mt-3">
-                            {type.amenities.map((amenity, i) => (
-                                <span key={i} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                                    {amenity}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
+
+            {roomTypes.length === 0 && !isLoading && !error && (
+                <div className="card p-8 text-center">
+                    <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No room types found</p>
+                    <button onClick={openCreateModal} className="btn-primary mt-4">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add First Room Type
+                    </button>
+                </div>
+            )}
 
             {/* Create/Edit Modal */}
             {isModalOpen && (
@@ -183,7 +208,7 @@ export function RoomTypesPage() {
                                     className="input"
                                     min="1"
                                     value={formData.capacity}
-                                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
+                                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 0 })}
                                     required
                                 />
                             </div>
@@ -238,7 +263,11 @@ export function RoomTypesPage() {
                                 <button type="button" onClick={closeModal} className="btn-secondary">
                                     Cancel
                                 </button>
-                                <button type="submit" className="btn-primary">
+                                <button
+                                    type="submit"
+                                    className="btn-primary"
+                                    disabled={createRoomType.isPending || updateRoomType.isPending}
+                                >
                                     <Check className="w-4 h-4 mr-2" />
                                     {isEditing ? 'Save Changes' : 'Create Room Type'}
                                 </button>

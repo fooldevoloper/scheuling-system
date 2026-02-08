@@ -1,14 +1,7 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, X, Check, Mail, Phone, User } from 'lucide-react';
-
-interface InstructorFormData {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-    specialization: string;
-    bio: string;
-}
+import { Plus, Edit, Trash2, X, Check, Mail, Phone, User, Loader2 } from 'lucide-react';
+import { useInstructors, useCreateInstructor, useUpdateInstructor, useDeleteInstructor } from '@/hooks';
+import type { Instructor, InstructorFormData } from '@/types';
 
 const initialFormData: InstructorFormData = {
     firstName: '',
@@ -23,62 +16,63 @@ export function InstructorsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<InstructorFormData>(initialFormData);
+    const [editingId, setEditingId] = useState<string | null>(null);
 
-    // Sample data
-    const [instructors, setInstructors] = useState([
-        { _id: '1', firstName: 'John', lastName: 'Smith', email: 'john.smith@university.edu', phone: '+1 234-567-8901', specialization: 'Computer Science', bio: 'Expert in Python and Machine Learning', isActive: true },
-        { _id: '2', firstName: 'Jane', lastName: 'Doe', email: 'jane.doe@university.edu', phone: '+1 234-567-8902', specialization: 'Mathematics', bio: 'Specializes in calculus and linear algebra', isActive: true },
-        { _id: '3', firstName: 'Alice', lastName: 'Johnson', email: 'alice.johnson@university.edu', phone: '+1 234-567-8903', specialization: 'Physics', bio: 'Researcher in quantum mechanics', isActive: true },
-        { _id: '4', firstName: 'Bob', lastName: 'Williams', email: 'bob.williams@university.edu', phone: '+1 234-567-8904', specialization: 'Chemistry', bio: 'Organic chemistry expert', isActive: true },
-    ]);
+    const { data: instructorsData, isLoading, error } = useInstructors();
+    const createInstructor = useCreateInstructor();
+    const updateInstructor = useUpdateInstructor();
+    const deleteInstructor = useDeleteInstructor();
+
+    const instructors: Instructor[] = ((instructorsData?.data?.data || []) as unknown) as Instructor[];
 
     const openCreateModal = () => {
         setIsEditing(false);
         setFormData(initialFormData);
+        setEditingId(null);
         setIsModalOpen(true);
     };
 
-    const openEditModal = (instructor: typeof instructors[0]) => {
+    const openEditModal = (instructor: Instructor) => {
         setIsEditing(true);
         setFormData({
             firstName: instructor.firstName,
             lastName: instructor.lastName,
             email: instructor.email,
-            phone: instructor.phone,
-            specialization: instructor.specialization,
-            bio: instructor.bio,
+            phone: instructor.phone || '',
+            specialization: instructor.specialization || '',
+            bio: instructor.bio || '',
         });
+        setEditingId(instructor._id);
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setFormData(initialFormData);
+        setEditingId(null);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (isEditing) {
-            // Update existing
-            const updated = instructors.map(inst =>
-                inst._id === instructors[0]._id ? { ...inst, ...formData, isActive: true } : inst
-            );
-            setInstructors(updated);
-        } else {
-            // Create new
-            const newInstructor = {
-                _id: Date.now().toString(),
-                ...formData,
-                isActive: true,
-            };
-            setInstructors([...instructors, newInstructor]);
+        try {
+            if (isEditing && editingId) {
+                await updateInstructor.mutateAsync({ id: editingId, data: formData });
+            } else {
+                await createInstructor.mutateAsync(formData);
+            }
+            closeModal();
+        } catch (error) {
+            console.error('Failed to save instructor:', error);
         }
-        closeModal();
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Are you sure you want to delete this instructor?')) {
-            setInstructors(instructors.filter(inst => inst._id !== id));
+            try {
+                await deleteInstructor.mutateAsync(id);
+            } catch (error) {
+                console.error('Failed to delete instructor:', error);
+            }
         }
     };
 
@@ -95,52 +89,78 @@ export function InstructorsPage() {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {instructors.map((instructor) => (
-                    <div key={instructor._id} className="card p-6 hover:shadow-md transition-shadow">
-                        <div className="flex items-start justify-between">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <User className="w-6 h-6 text-primary-600" />
+            {/* Loading State */}
+            {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+                </div>
+            ) : error ? (
+                <div className="card p-8 text-center text-red-500">
+                    Failed to load instructors. Please try again.
+                </div>
+            ) : (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {instructors.map((instructor) => (
+                            <div key={instructor._id} className="card p-6 hover:shadow-md transition-shadow">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center space-x-4">
+                                        <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <User className="w-6 h-6 text-primary-600" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-gray-900">
+                                                {instructor.firstName} {instructor.lastName}
+                                            </h3>
+                                            <p className="text-sm text-gray-500">{instructor.specialization}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                        <button
+                                            onClick={() => openEditModal(instructor)}
+                                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(instructor._id)}
+                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-semibold text-gray-900">
-                                        {instructor.firstName} {instructor.lastName}
-                                    </h3>
-                                    <p className="text-sm text-gray-500">{instructor.specialization}</p>
+                                <div className="mt-4 space-y-2">
+                                    <div className="flex items-center text-sm text-gray-600">
+                                        <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                                        <span className="truncate">{instructor.email}</span>
+                                    </div>
+                                    {instructor.phone && (
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <Phone className="w-4 h-4 mr-2 text-gray-400" />
+                                            <span>{instructor.phone}</span>
+                                        </div>
+                                    )}
                                 </div>
+                                {instructor.bio && (
+                                    <p className="text-sm text-gray-600 mt-3 line-clamp-2">{instructor.bio}</p>
+                                )}
                             </div>
-                            <div className="flex items-center space-x-1">
-                                <button
-                                    onClick={() => openEditModal(instructor)}
-                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                                >
-                                    <Edit className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(instructor._id)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="mt-4 space-y-2">
-                            <div className="flex items-center text-sm text-gray-600">
-                                <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                                <span className="truncate">{instructor.email}</span>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600">
-                                <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                                <span>{instructor.phone}</span>
-                            </div>
-                        </div>
-                        {instructor.bio && (
-                            <p className="text-sm text-gray-600 mt-3 line-clamp-2">{instructor.bio}</p>
-                        )}
+                        ))}
                     </div>
-                ))}
-            </div>
+
+                    {instructors.length === 0 && (
+                        <div className="card p-8 text-center">
+                            <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <p className="text-gray-500">No instructors found</p>
+                            <button onClick={openCreateModal} className="btn-primary mt-4">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add First Instructor
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
 
             {/* Create/Edit Modal */}
             {isModalOpen && (
@@ -238,7 +258,11 @@ export function InstructorsPage() {
                                 <button type="button" onClick={closeModal} className="btn-secondary">
                                     Cancel
                                 </button>
-                                <button type="submit" className="btn-primary">
+                                <button
+                                    type="submit"
+                                    className="btn-primary"
+                                    disabled={createInstructor.isPending || updateInstructor.isPending}
+                                >
                                     <Check className="w-4 h-4 mr-2" />
                                     {isEditing ? 'Save Changes' : 'Add Instructor'}
                                 </button>

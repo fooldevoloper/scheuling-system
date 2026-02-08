@@ -62,8 +62,10 @@ export class ClassController {
                 pagination: paginationMeta
             };
 
-            // Cache the response
-            await cacheService.set(cacheKey, response);
+            // Only cache if there's data
+            if (data && data.length > 0) {
+                await cacheService.set(cacheKey, response);
+            }
 
             sendOk(res, 'Classes Fetched', 'Class list loaded', response);
         } catch (error) {
@@ -140,7 +142,8 @@ export class ClassController {
             const newClass = await classRepository.create(classDataWithDates as Partial<IClass>);
 
             // Invalidate cache
-            await cacheService.invalidateClasses();
+            await cacheService.deleteByPattern('schedule:classes:*');
+            await cacheService.invalidateCalendar();
 
             sendCreated(res, 'Class Created', 'New class scheduled successfully', newClass);
         } catch (error) {
@@ -187,7 +190,9 @@ export class ClassController {
             }
 
             // Invalidate cache
-            await cacheService.invalidateClass(id);
+            await cacheService.delete(`schedule:class:${id}`);
+            await cacheService.invalidateCalendar();
+            await cacheService.deleteByPattern('schedule:classes:*');
 
             sendOk(res, 'Class Updated', 'Class updated successfully', updatedClass);
         } catch (error) {
@@ -211,7 +216,9 @@ export class ClassController {
             }
 
             // Invalidate cache
-            await cacheService.invalidateClass(id);
+            await cacheService.delete(`schedule:class:${id}`);
+            await cacheService.invalidateCalendar();
+            await cacheService.deleteByPattern('schedule:classes:*');
 
             sendOk(res, 'Class Deleted', 'Class deleted successfully', deletedClass);
         } catch (error) {
@@ -255,7 +262,11 @@ export class ClassController {
                 roomId
             );
 
-            await cacheService.set(cacheKey, calendarData);
+            // Only cache if there's data
+            const calendarArray = Array.isArray(calendarData) ? calendarData : [];
+            if (calendarArray.length > 0) {
+                await cacheService.set(cacheKey, calendarData);
+            }
 
             sendOk(res, 'Calendar Data', 'Calendar view loaded', calendarData);
         } catch (error) {

@@ -58,8 +58,10 @@ export class InstructorController {
                 },
             };
 
-            // Cache the response
-            await cacheService.set(cacheKey, response);
+            // Only cache if there's data
+            if (instructors && instructors.length > 0) {
+                await cacheService.set(cacheKey, response);
+            }
 
             sendOk(res, 'Instructors Fetched', 'Instructors loaded', response);
         } catch (error) {
@@ -112,6 +114,7 @@ export class InstructorController {
 
             // Invalidate cache
             await cacheService.deleteByPattern('instructors*');
+            await cacheService.invalidateClasses();
 
             sendCreated(res, 'Instructor Created', 'New instructor created successfully', newInstructor);
         } catch (error) {
@@ -140,8 +143,7 @@ export class InstructorController {
             }
 
             // Invalidate cache
-            await cacheService.delete(`instructor:${id}`);
-            await cacheService.deleteByPattern('instructors*');
+            await cacheService.invalidateInstructor(id);
 
             sendOk(res, 'Instructor Updated', 'Instructor updated successfully', updatedInstructor);
         } catch (error) {
@@ -169,8 +171,7 @@ export class InstructorController {
             }
 
             // Invalidate cache
-            await cacheService.delete(`instructor:${id}`);
-            await cacheService.deleteByPattern('instructors*');
+            await cacheService.invalidateInstructor(id);
 
             sendOk(res, 'Instructor Deleted', 'Instructor deleted successfully', deletedInstructor);
         } catch (error) {

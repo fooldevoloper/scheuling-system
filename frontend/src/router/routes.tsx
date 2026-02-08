@@ -7,6 +7,7 @@ import { Layout } from '@/components/Layout';
 import { DashboardPage } from '@/pages/Dashboard';
 import { ClassesPage } from '@/pages/Classes';
 import { ClassDetailPage } from '@/pages/ClassDetail';
+import { EditClassPage } from '@/pages/EditClass';
 import { CreateClassPage } from '@/pages/CreateClass';
 import { CalendarPage } from '@/pages/Calendar';
 import { RoomTypesPage } from '@/pages/RoomTypes';
@@ -73,6 +74,16 @@ const createClassRoute = createRoute({
     ),
 });
 
+const editClassRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/classes/$classId/edit',
+    component: () => (
+        <Layout>
+            <EditClassPage />
+        </Layout>
+    ),
+});
+
 // Calendar Route
 const calendarRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -135,6 +146,7 @@ const routeTree = rootRoute.addChildren([
     classesRoute,
     classDetailRoute,
     createClassRoute,
+    editClassRoute,
     calendarRoute,
     roomTypesRoute,
     roomsRoute,

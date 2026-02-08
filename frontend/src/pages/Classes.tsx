@@ -1,16 +1,8 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Plus, Search, Filter, Calendar, Clock, Users, MoreVertical } from 'lucide-react';
-
-// Sample classes data
-const sampleClasses = [
-    { _id: '1', name: 'Introduction to Python', courseCode: 'CS101', classType: 'single' as const, instructor: 'Dr. John Smith', room: 'Room 101', startDate: '2024-02-15', startTime: '09:00', endTime: '10:30', status: 'active' as const },
-    { _id: '2', name: 'Advanced Mathematics', courseCode: 'MATH201', classType: 'recurring' as const, instructor: 'Dr. Jane Doe', room: 'Room 203', startDate: '2024-02-01', startTime: '11:00', endTime: '12:30', status: 'active' as const, recurrence: { pattern: 'weekly' as const, daysOfWeek: [1, 3] } },
-    { _id: '3', name: 'Data Structures', courseCode: 'CS201', classType: 'recurring' as const, instructor: 'Prof. Alice Johnson', room: 'Lab A', startDate: '2024-02-01', startTime: '14:00', endTime: '15:30', status: 'active' as const, recurrence: { pattern: 'weekly' as const, daysOfWeek: [2, 4] } },
-    { _id: '4', name: 'Web Development', courseCode: 'CS301', classType: 'single' as const, instructor: 'Dr. Bob Williams', room: 'Room 105', startDate: '2024-02-20', startTime: '10:00', endTime: '12:00', status: 'active' as const },
-    { _id: '5', name: 'Database Systems', courseCode: 'CS401', classType: 'recurring' as const, instructor: 'Prof. Carol Brown', room: 'Lab B', startDate: '2024-02-05', startTime: '09:00', endTime: '10:30', status: 'active' as const, recurrence: { pattern: 'monthly' as const, dayOfMonth: [5, 20] } },
-    { _id: '6', name: 'Machine Learning', courseCode: 'CS501', classType: 'recurring' as const, instructor: 'Dr. John Smith', room: 'Room 301', startDate: '2024-02-01', startTime: '15:00', endTime: '17:00', status: 'inactive' as const, recurrence: { pattern: 'daily' as const } },
-];
+import { Plus, Search, Calendar, Clock, Users, MoreVertical, Loader2 } from 'lucide-react';
+import { useClasses } from '@/hooks';
+import type { Class } from '@/types';
 
 const statusColors = {
     active: 'bg-green-100 text-green-700',
@@ -26,16 +18,24 @@ export function ClassesPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [page, setPage] = useState(1);
 
-    const filteredClasses = sampleClasses.filter(cls => {
-        const matchesSearch = cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            cls.courseCode?.toLowerCase().includes(searchQuery.toLowerCase());
+    const { data: classesData, isLoading, error } = useClasses({
+        page,
+        limit: 12,
+    });
+
+    const classes: Class[] = ((classesData?.data?.data || []) as unknown) as Class[];
+
+    const filteredClasses = classes.filter(cls => {
+        const matchesSearch = (cls.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            cls.courseCode?.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchesType = filterType === 'all' || cls.classType === filterType;
-        const matchesStatus = filterStatus === 'all' || cls.status === filterStatus;
+        const matchesStatus = filterStatus === 'all' || (cls.isActive ? 'active' : 'inactive') === filterStatus;
         return matchesSearch && matchesType && matchesStatus;
     });
 
-    const formatRecurrence = (cls: typeof sampleClasses[0]) => {
+    const formatRecurrence = (cls: Class) => {
         if (cls.classType === 'single') return 'Single Event';
         if (!cls.recurrence) return 'Recurring';
 
@@ -96,80 +96,107 @@ export function ClassesPage() {
                 </div>
             </div>
 
-            {/* Classes Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredClasses.map((cls) => (
-                    <div key={cls._id} className="card hover:shadow-md transition-shadow">
-                        <div className="p-4">
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                    <div className="flex items-center space-x-2">
-                                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${typeColors[cls.classType]}`}>
-                                            {cls.classType}
-                                        </span>
-                                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[cls.status]}`}>
-                                            {cls.status}
-                                        </span>
+            {/* Loading State */}
+            {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+                </div>
+            ) : error ? (
+                <div className="card p-8 text-center text-red-500">
+                    Failed to load classes. Please try again.
+                </div>
+            ) : (
+                <>
+                    {/* Classes Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredClasses.map((cls) => (
+                            <div key={cls._id} className="card hover:shadow-md transition-shadow">
+                                <div className="p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center space-x-2">
+                                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${typeColors[cls.classType]}`}>
+                                                    {cls.classType}
+                                                </span>
+                                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${cls.isActive ? statusColors.active : statusColors.inactive}`}>
+                                                    {cls.isActive ? 'active' : 'inactive'}
+                                                </span>
+                                            </div>
+                                            <h3 className="font-semibold text-gray-900 mt-2">{cls.name}</h3>
+                                            <p className="text-sm text-gray-500">{cls.courseCode}</p>
+                                        </div>
+                                        <button className="p-1 text-gray-400 hover:text-gray-600">
+                                            <MoreVertical className="w-5 h-5" />
+                                        </button>
                                     </div>
-                                    <h3 className="font-semibold text-gray-900 mt-2">{cls.name}</h3>
-                                    <p className="text-sm text-gray-500">{cls.courseCode}</p>
-                                </div>
-                                <button className="p-1 text-gray-400 hover:text-gray-600">
-                                    <MoreVertical className="w-5 h-5" />
-                                </button>
-                            </div>
 
-                            <div className="mt-4 space-y-2">
-                                <div className="flex items-center text-sm text-gray-600">
-                                    <Users className="w-4 h-4 mr-2 text-gray-400" />
-                                    <span>{cls.instructor}</span>
-                                </div>
-                                <div className="flex items-center text-sm text-gray-600">
-                                    <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                                    <span>{cls.startDate}</span>
-                                </div>
-                                <div className="flex items-center text-sm text-gray-600">
-                                    <Clock className="w-4 h-4 mr-2 text-gray-400" />
-                                    <span>{cls.startTime} - {cls.endTime}</span>
-                                </div>
-                            </div>
+                                    <div className="mt-4 space-y-2">
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <Users className="w-4 h-4 mr-2 text-gray-400" />
+                                            <span>{cls.instructor ? `${cls.instructor.firstName} ${cls.instructor.lastName}` : 'Not assigned'}</span>
+                                        </div>
+                                        <div className="flex items-center text-sm text-gray-600">
+                                            <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                                            <span>{cls.startDate ? new Date(cls.startDate).toLocaleDateString() : 'Not scheduled'}</span>
+                                        </div>
+                                        {(cls.startTime || cls.endTime) && (
+                                            <div className="flex items-center text-sm text-gray-600">
+                                                <Clock className="w-4 h-4 mr-2 text-gray-400" />
+                                                <span>{cls.startTime} - {cls.endTime}</span>
+                                            </div>
+                                        )}
+                                    </div>
 
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                                <p className="text-xs text-gray-500">
-                                    <span className="font-medium">Pattern:</span> {formatRecurrence(cls)}
-                                </p>
+                                    <div className="mt-3 pt-3 border-t border-gray-100">
+                                        <p className="text-xs text-gray-500">
+                                            <span className="font-medium">Pattern:</span> {formatRecurrence(cls)}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-end">
+                                    <Link
+                                        to="/classes/$classId"
+                                        params={{ classId: cls._id }}
+                                        className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                                    >
+                                        View Details →
+                                    </Link>
+                                </div>
                             </div>
+                        ))}
+                    </div>
+
+                    {filteredClasses.length === 0 && (
+                        <div className="card p-8 text-center">
+                            <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <p className="text-gray-500">No classes found matching your criteria</p>
                         </div>
-                        <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-end">
-                            <Link
-                                to="/classes/$classId"
-                                params={{ classId: cls._id }}
-                                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                    )}
+
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm text-gray-500">
+                            Showing {filteredClasses.length} of {classesData?.data?.pagination?.total || 0} classes
+                        </p>
+                        <div className="flex gap-2">
+                            <button
+                                className="btn-secondary"
+                                disabled={page === 1}
+                                onClick={() => setPage(page - 1)}
                             >
-                                View Details →
-                            </Link>
+                                Previous
+                            </button>
+                            <button
+                                className="btn-secondary"
+                                disabled={!classesData?.data?.pagination || page >= (classesData.data.pagination.totalPages || 1)}
+                                onClick={() => setPage(page + 1)}
+                            >
+                                Next
+                            </button>
                         </div>
                     </div>
-                ))}
-            </div>
-
-            {filteredClasses.length === 0 && (
-                <div className="card p-8 text-center">
-                    <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">No classes found matching your criteria</p>
-                </div>
+                </>
             )}
-
-            {/* Pagination */}
-            <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">
-                    Showing {filteredClasses.length} of {sampleClasses.length} classes
-                </p>
-                <div className="flex gap-2">
-                    <button className="btn-secondary" disabled>Previous</button>
-                    <button className="btn-secondary">Next</button>
-                </div>
-            </div>
         </div>
     );
 }

@@ -56,8 +56,10 @@ export class RoomTypeController {
                 },
             };
 
-            // Cache the response
-            await cacheService.set(cacheKey, response);
+            // Only cache if there's data
+            if (roomTypes && roomTypes.length > 0) {
+                await cacheService.set(cacheKey, response);
+            }
 
             sendOk(res, 'Room Types Fetched', 'Room types loaded', response);
         } catch (error) {
@@ -113,6 +115,7 @@ export class RoomTypeController {
 
             // Invalidate cache
             await cacheService.deleteByPattern('roomtypes*');
+            await cacheService.invalidateClasses();
 
             sendCreated(res, 'Room Type Created', 'New room type created successfully', newRoomType);
         } catch (error) {
@@ -141,8 +144,7 @@ export class RoomTypeController {
             }
 
             // Invalidate cache
-            await cacheService.delete(`roomtype:${id}`);
-            await cacheService.deleteByPattern('roomtypes*');
+            await cacheService.invalidateRoomType(id);
 
             sendOk(res, 'Room Type Updated', 'Room type updated successfully', updatedRoomType);
         } catch (error) {
@@ -170,8 +172,7 @@ export class RoomTypeController {
             }
 
             // Invalidate cache
-            await cacheService.delete(`roomtype:${id}`);
-            await cacheService.deleteByPattern('roomtypes*');
+            await cacheService.invalidateRoomType(id);
 
             sendOk(res, 'Room Type Deleted', 'Room type deleted successfully', deletedRoomType);
         } catch (error) {

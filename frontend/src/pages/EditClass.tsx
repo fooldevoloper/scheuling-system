@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { useState, useEffect } from 'react';
+import { useParams, Link } from '@tanstack/react-router';
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
-import { useInstructors, useRoomTypes, useRooms, useCreateClass } from '@/hooks';
+import { useClass, useInstructors, useRoomTypes, useRooms, useUpdateClass } from '@/hooks';
 import type { RecurrencePattern, Instructor, RoomType, Room } from '@/types';
 
 type ClassType = 'single' | 'recurring';
@@ -11,10 +11,17 @@ interface TimeSlot {
     endTime: string;
 }
 
-export function CreateClassPage() {
+export function EditClassPage() {
+    const { classId } = useParams({ from: '/classes/$classId/edit' });
+
+    const { data: classData, isLoading, error } = useClass(classId);
+    const { data: instructorsData } = useInstructors();
+    const { data: roomTypesData } = useRoomTypes();
+    const { data: roomsData } = useRooms();
+    const updateClass = useUpdateClass();
+
     const [classType, setClassType] = useState<ClassType>('single');
     const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('weekly');
-    const [showAdvanced, setShowAdvanced] = useState(false);
 
     // Form fields
     const [name, setName] = useState('');
@@ -37,10 +44,65 @@ export function CreateClassPage() {
     const [daysOfMonth, setDaysOfMonth] = useState<number[]>([]);
     const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([{ startTime: '', endTime: '' }]);
 
-    const { data: instructorsData } = useInstructors();
-    const { data: roomTypesData } = useRoomTypes();
-    const { data: roomsData } = useRooms();
-    const createClass = useCreateClass();
+    // Load class data when available
+    useEffect(() => {
+        if (classData?.data) {
+            const cls = classData.data as {
+                name?: string;
+                courseCode?: string;
+                description?: string;
+                classType?: string;
+                instructorId?: string;
+                roomTypeId?: string;
+                roomId?: string;
+                startDate?: string;
+                endDate?: string;
+                startTime?: string;
+                endTime?: string;
+                recurrence?: {
+                    pattern?: string;
+                    daysOfWeek?: number[];
+                    dayOfMonth?: number[];
+                    interval?: number;
+                    timeSlots?: { startTime?: string; endTime?: string }[];
+                    endDate?: string;
+                };
+            };
+
+            if (cls) {
+                setName(cls.name || '');
+                setCourseCode(cls.courseCode || '');
+                setDescription(cls.description || '');
+                setClassType(cls.classType as ClassType || 'single');
+                setInstructorId(cls.instructorId || '');
+                setRoomTypeId(cls.roomTypeId || '');
+                setRoomId(cls.roomId || '');
+                setStartTime(cls.startTime || '');
+                setEndTime(cls.endTime || '');
+
+                if (cls.classType === 'single') {
+                    setSingleDate(cls.startDate?.split('T')[0] || '');
+                } else {
+                    setStartDate(cls.startDate?.split('T')[0] || '');
+                    setEndDate(cls.endDate?.split('T')[0] || '');
+
+                    if (cls.recurrence) {
+                        setRecurrencePattern((cls.recurrence.pattern || 'weekly') as RecurrencePattern);
+                        setDaysOfWeek(cls.recurrence.daysOfWeek || []);
+                        setDaysOfMonth(cls.recurrence.dayOfMonth || []);
+                        setInterval(cls.recurrence.interval || 1);
+
+                        if (cls.recurrence.timeSlots && cls.recurrence.timeSlots.length > 0) {
+                            setTimeSlots(cls.recurrence.timeSlots.map(ts => ({
+                                startTime: ts.startTime || '',
+                                endTime: ts.endTime || ''
+                            })));
+                        }
+                    }
+                }
+            }
+        }
+    }, [classData]);
 
     const instructors: Instructor[] = ((instructorsData?.data?.data || []) as unknown) as Instructor[];
     const roomTypes: RoomType[] = ((roomTypesData?.data?.data || []) as unknown) as RoomType[];
@@ -124,23 +186,51 @@ export function CreateClassPage() {
         };
 
         try {
-            await createClass.mutateAsync(classData);
-            // Navigate back to classes page on success
-            window.location.href = '/classes';
+            await updateClass.mutateAsync({ id: classId, data: classData });
+            window.location.href = `/classes/${classId}`;
         } catch (error) {
-            console.error('Failed to create class:', error);
+            console.error('Failed to update class:', error);
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Loading class...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !classData?.data) {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center space-x-4">
+                    <Link to="/classes" className="p-2 hover:bg-gray-100 rounded-lg">
+                        <ArrowLeft className="w-5 h-5" />
+                    </Link>
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">Class Not Found</h1>
+                    </div>
+                </div>
+                <div className="card p-8 text-center text-red-500">
+                    Failed to load class details. Please try again.
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex items-center space-x-4">
-                <Link to="/classes" className="p-2 hover:bg-gray-100 rounded-lg">
+                <a href={`/classes/${classId}`} className="p-2 hover:bg-gray-100 rounded-lg">
                     <ArrowLeft className="w-5 h-5" />
-                </Link>
+                </a>
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Create New Class</h1>
-                    <p className="text-gray-500">Schedule a new class or recurring class</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Edit Class</h1>
+                    <p className="text-gray-500">Update class information and schedule</p>
                 </div>
             </div>
 
@@ -475,16 +565,16 @@ export function CreateClassPage() {
 
                 {/* Submit */}
                 <div className="flex justify-end space-x-3 pt-4 border-t">
-                    <Link to="/classes" className="btn-secondary">
+                    <a href={`/classes/${classId}`} className="btn-secondary">
                         Cancel
-                    </Link>
+                    </a>
                     <button
                         type="submit"
                         className="btn-primary"
-                        disabled={createClass.isPending}
+                        disabled={updateClass.isPending}
                     >
                         <Save className="w-4 h-4 mr-2" />
-                        {createClass.isPending ? 'Creating...' : (classType === 'single' ? 'Create Class' : 'Create Recurring Class')}
+                        {updateClass.isPending ? 'Saving...' : 'Save Changes'}
                     </button>
                 </div>
             </form>
