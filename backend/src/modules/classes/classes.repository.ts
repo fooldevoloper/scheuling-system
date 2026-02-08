@@ -440,6 +440,22 @@ export class ClassesRepository {
             .sort({ startDate: 1 })
             .exec();
     }
+
+    /**
+     * Find recurring classes with exclusion settings
+     */
+    async findRecurringWithExclusions(): Promise<IClass[]> {
+        return Class.find({
+            classType: 'recurring',
+            isActive: true,
+            $or: [
+                { 'recurrence.excludeWeekends': true },
+                { 'recurrence.exclusionDates': { $exists: true, $ne: [] } }
+            ]
+        })
+            .select('name recurrence')
+            .exec();
+    }
 }
 
 export const classesRepository = new ClassesRepository();

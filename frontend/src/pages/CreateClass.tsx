@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, X, Calendar } from 'lucide-react';
 import { useInstructors, useRoomTypes, useRooms, useCreateClass } from '@/hooks';
 import type { RecurrencePattern, Instructor, RoomType, Room } from '@/types';
 
@@ -36,6 +36,11 @@ export function CreateClassPage() {
     const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
     const [daysOfMonth, setDaysOfMonth] = useState<number[]>([]);
     const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([{ startTime: '', endTime: '' }]);
+    const [excludeWeekends, setExcludeWeekends] = useState(false);
+
+    // Exclusion dates
+    const [exclusionDates, setExclusionDates] = useState<string[]>([]);
+    const [newExclusionDate, setNewExclusionDate] = useState('');
 
     const { data: instructorsData } = useInstructors();
     const { data: roomTypesData } = useRoomTypes();
@@ -93,6 +98,18 @@ export function CreateClassPage() {
         }
     };
 
+    // Exclusion dates handlers
+    const addExclusionDate = () => {
+        if (newExclusionDate && !exclusionDates.includes(newExclusionDate)) {
+            setExclusionDates([...exclusionDates, newExclusionDate].sort());
+            setNewExclusionDate('');
+        }
+    };
+
+    const removeExclusionDate = (date: string) => {
+        setExclusionDates(exclusionDates.filter(d => d !== date));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -119,6 +136,8 @@ export function CreateClassPage() {
                     interval,
                     timeSlots,
                     endDate,
+                    excludeWeekends,
+                    exclusionDates: exclusionDates.length > 0 ? exclusionDates : undefined,
                 },
             }),
         };
@@ -455,6 +474,86 @@ export function CreateClassPage() {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+
+                        {/* Exclusion Options */}
+                        <div className="border-t pt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <label className="block text-sm font-medium text-gray-700">
+                                    Exclusion Options
+                                </label>
+                                <button
+                                    type="button"
+                                    className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center"
+                                    onClick={() => setShowAdvanced(!showAdvanced)}
+                                >
+                                    <Calendar className="w-4 h-4 mr-1" />
+                                    {showAdvanced ? 'Hide' : 'Show'} Exclusion Dates
+                                </button>
+                            </div>
+
+                            {/* Exclude Weekends Checkbox */}
+                            <div className="mb-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                                        checked={excludeWeekends}
+                                        onChange={(e) => setExcludeWeekends(e.target.checked)}
+                                    />
+                                    <span className="text-sm text-gray-700">
+                                        Exclude Weekends (Saturday and Sunday)
+                                    </span>
+                                </label>
+                            </div>
+
+                            {/* Specific Exclusion Dates */}
+                            {showAdvanced && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="date"
+                                            className="input"
+                                            value={newExclusionDate}
+                                            onChange={(e) => setNewExclusionDate(e.target.value)}
+                                            min={startDate}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn-secondary"
+                                            onClick={addExclusionDate}
+                                            disabled={!newExclusionDate}
+                                        >
+                                            <Plus className="w-4 h-4 mr-1" />
+                                            Add
+                                        </button>
+                                    </div>
+
+                                    {exclusionDates.length > 0 && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {exclusionDates.map((date) => (
+                                                <div
+                                                    key={date}
+                                                    className="flex items-center gap-1 px-3 py-1 bg-red-50 text-red-700 rounded-full text-sm"
+                                                >
+                                                    <span>{date}</span>
+                                                    <button
+                                                        type="button"
+                                                        className="text-red-500 hover:text-red-700"
+                                                        onClick={() => removeExclusionDate(date)}
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <p className="text-sm text-gray-500">
+                                        Selected dates will be excluded from the recurring schedule.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

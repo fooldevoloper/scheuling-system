@@ -235,6 +235,70 @@ export class ClassesService {
         return { count: 0 };
     }
 
+    /**
+     * Get exclusion dates for calendar
+     */
+    async getExclusions(startDate: string, endDate: string): Promise<{ date: string; reason: string; className?: string }[]> {
+        const exclusions: { date: string; reason: string; className?: string }[] = [];
+
+        // Get all recurring classes with exclusion settings
+        const classes = await classesRepository.findRecurringWithExclusions();
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        for (const cls of classes) {
+            const classStart = cls.startDate ? new Date(cls.startDate) : start;
+            const classEnd = cls.recurrence?.endDate ? new Date(cls.recurrence.endDate) : end;
+
+            // Calculate the overlap between class date range and query range
+            const overlapStart = start > classStart ? start : classStart;
+            const overlapEnd = end < classEnd ? end : classEnd;
+
+            if (overlapStart > overlapEnd) continue;
+
+            // Add specific exclusion dates
+            if (cls.recurrence?.exclusionDates) {
+                for (const exclusionDate of cls.recurrence.exclusionDates) {
+                    const date = new Date(exclusionDate);
+                    if (date >= overlapStart && date <= overlapEnd) {
+                        exclusions.push({
+                            date: exclusionDate,
+                            reason: `Excluded: ${cls.name}`,
+                            className: cls.name
+                        });
+                    }
+                }
+            }
+
+            // Add weekends if excludeWeekends is true
+            if (cls.recurrence?.excludeWeekends) {
+                let currentDate = new Date(overlapStart);
+                while (currentDate <= overlapEnd) {
+                    const dayOfWeek = currentDate.getDay();
+                    // 0 = Sunday, 6 = Saturday
+                    if (dayOfWeek === 0 || dayOfWeek === 6) {
+                        const dateStr = currentDate.toISOString().split('T')[0];
+                        // Check if not already added
+                        if (!exclusions.find(e => e.date === dateStr && e.className === cls.name)) {
+                            exclusions.push({
+                                date: dateStr,
+                                reason: `Weekend excluded: ${cls.name}`,
+                                className: cls.name
+                            });
+                        }
+                    }
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            }
+        }
+
+        // Sort by date
+        exclusions.sort((a, b) => a.date.localeCompare(b.date));
+
+        return exclusions;
+    }
+
     // ============================================
     // Private Helper Methods
     // ============================================

@@ -6,7 +6,7 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import { Calendar as CalendarIcon, Clock, Users, MapPin, Loader2, X, LayoutGrid, List, Calendar } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { calendarApi } from '../api/calendarApi';
+import { calendarApi, ExclusionInfo } from '../api/calendarApi';
 import type { CalendarEvent, ClassStatus } from '../types/calendar.types';
 import { ListView } from './ListView';
 
@@ -39,6 +39,7 @@ export function CalendarPage() {
     const [currentView, setCurrentView] = useState<string>('dayGridMonth');
     const [mainView, setMainView] = useState<MainView>('calendar');
     const [calendarData, setCalendarData] = useState<Record<string, unknown[]> | null>(null);
+    const [exclusionDates, setExclusionDates] = useState<ExclusionInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
     const [currentDateRange, setCurrentDateRange] = useState<{ start: string; end: string } | null>(null);
@@ -48,8 +49,12 @@ export function CalendarPage() {
     const fetchCalendarData = useCallback(async (startDate: string, endDate: string) => {
         setIsLoading(true);
         try {
-            const response = await calendarApi.getCalendarData({ startDate, endDate });
-            setCalendarData(response.data as Record<string, unknown[]>);
+            const [calendarResponse, exclusionsResponse] = await Promise.all([
+                calendarApi.getCalendarData({ startDate, endDate }),
+                calendarApi.getExclusionDates({ startDate, endDate })
+            ]);
+            setCalendarData(calendarResponse.data as Record<string, unknown[]>);
+            setExclusionDates(exclusionsResponse.data || []);
         } catch (error) {
             console.error('Failed to fetch calendar data:', error);
         } finally {
@@ -96,7 +101,7 @@ export function CalendarPage() {
 
     // Transform to FullCalendar format
     const fullCalendarEvents = useMemo(() => {
-        return calendarEvents.map(event => ({
+        const events = calendarEvents.map(event => ({
             id: event.id,
             title: event.title,
             start: `${event.date}T${event.startTime}:00`,
@@ -109,7 +114,23 @@ export function CalendarPage() {
             borderColor: getEventColor(event),
             textColor: '#ffffff',
         }));
-    }, [calendarEvents]);
+
+        // Add exclusion dates as background events
+        const exclusionEvents = exclusionDates.map((exclusion, index) => ({
+            id: `exclusion-${index}`,
+            title: '',
+            start: exclusion.date,
+            end: exclusion.date,
+            allDay: true,
+            display: 'background',
+            backgroundColor: '#fee2e2',
+            borderColor: '#fecaca',
+            textColor: '#991b1b',
+            classNames: ['exclusion-event'],
+        }));
+
+        return [...events, ...exclusionEvents];
+    }, [calendarEvents, exclusionDates]);
 
     // Get event color based on status
     function getEventColor(event: CalendarEvent): string {
@@ -158,7 +179,9 @@ export function CalendarPage() {
     // Handle event click
     const handleEventClick = useCallback((clickInfo: any) => {
         const event = clickInfo.event.extendedProps as CalendarEvent;
-        setSelectedEvent(event);
+        if (event.title) {
+            setSelectedEvent(event);
+        }
     }, []);
 
     // Handle close modal
@@ -309,6 +332,10 @@ export function CalendarPage() {
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded bg-purple-500"></div>
                             <span>Recurring</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded bg-red-200"></div>
+                            <span>Excluded Date</span>
                         </div>
                     </div>
                 </>

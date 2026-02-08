@@ -20,6 +20,12 @@ router.get('/', classesController.getClasses.bind(classesController));
 router.get('/calendar', classesController.getCalendar.bind(classesController));
 
 /**
+ * GET /api/classes/exclusions
+ * Get exclusion dates for calendar
+ */
+router.get('/exclusions', classesController.getExclusions.bind(classesController));
+
+/**
  * GET /api/classes/:id
  * Get single class by ID
  */

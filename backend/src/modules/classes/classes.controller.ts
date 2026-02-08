@@ -192,6 +192,28 @@ export class ClassesController {
     }
 
     /**
+     * GET /api/classes/exclusions
+     * Get exclusion dates for calendar
+     */
+    async getExclusions(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const startDate = req.query.startDate as string;
+            const endDate = req.query.endDate as string;
+
+            if (!startDate || !endDate) {
+                sendConflictError(res, 'Start date and end date are required');
+                return;
+            }
+
+            const exclusions = await classesService.getExclusions(startDate, endDate);
+
+            sendOk(res, 'Exclusions', 'Exclusion dates loaded', exclusions);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
      * POST /api/classes/:id/generate-instances
      * Generate instances for a recurring class
      */
