@@ -55,18 +55,111 @@ export class ClassesRepository {
      * Update class status
      * For single classes: updates the main status
      * For recurring classes: updates specific instance status if instanceId provided
+     * For recurring classes: if instanceId is a date-based ID (format: classId-YYYY-MM-DD or date-YYYY-MM-DD), adds/updates the generatedInstances array
      */
     async updateStatus(
         id: string,
         status: ClassStatus,
         instanceId?: string
     ): Promise<IClass | null> {
-        if (instanceId) {
+        // Check if instanceId is a date-based ID
+        // Formats: date-YYYY-MM-DD, YYYY-MM-DD, or classId-YYYY-MM-DD
+        const dateMatch = instanceId?.match(/(?:date-|)(20\d{2}-\d{2}-\d{2})$/);
+        if (instanceId && dateMatch) {
+            // Extract the date from the instanceId
+            const dateStr = dateMatch[1];
+
+            // Try to find and update existing instance in generatedInstances
+            const existingClass = await Class.findById(id);
+            if (!existingClass) {
+                return null;
+            }
+
+            // Check if generatedInstances exists, if not initialize it
+            if (!existingClass.generatedInstances) {
+                // Initialize generatedInstances array with this instance
+                const timeSlot = existingClass.recurrence?.timeSlots?.[0] || {
+                    startTime: existingClass.startTime,
+                    endTime: existingClass.endTime
+                };
+
+                return Class.findByIdAndUpdate(
+                    id,
+                    {
+                        generatedInstances: [{
+                            instanceId: new mongoose.Types.ObjectId(),
+                            date: new Date(dateStr),
+                            startTime: timeSlot.startTime,
+                            endTime: timeSlot.endTime,
+                            status: status
+                        }]
+                    },
+                    { new: true }
+                )
+                    .populate('instructor')
+                    .populate('roomType')
+                    .populate('room')
+                    .exec();
+            }
+
+            // Find existing instance
+            const existingInstanceIndex = existingClass.generatedInstances.findIndex(
+                (instance: any) => {
+                    const instanceDate = instance.date instanceof Date
+                        ? instance.date.toISOString().split('T')[0]
+                        : new Date(instance.date).toISOString().split('T')[0];
+                    return instanceDate === dateStr;
+                }
+            );
+
+            if (existingInstanceIndex >= 0) {
+                // Update existing instance using positional operator
+                return Class.findOneAndUpdate(
+                    { _id: id },
+                    { $set: { [`generatedInstances.${existingInstanceIndex}.status`]: status } },
+                    { new: true }
+                )
+                    .populate('instructor')
+                    .populate('roomType')
+                    .populate('room')
+                    .exec();
+            } else {
+                // Add new instance to generatedInstances array
+                const timeSlot = existingClass.recurrence?.timeSlots?.[0] || {
+                    startTime: existingClass.startTime,
+                    endTime: existingClass.endTime
+                };
+
+                return Class.findByIdAndUpdate(
+                    id,
+                    {
+                        $push: {
+                            generatedInstances: {
+                                instanceId: new mongoose.Types.ObjectId(),
+                                date: new Date(dateStr),
+                                startTime: timeSlot.startTime,
+                                endTime: timeSlot.endTime,
+                                status: status
+                            }
+                        }
+                    },
+                    { new: true }
+                )
+                    .populate('instructor')
+                    .populate('roomType')
+                    .populate('room')
+                    .exec();
+            }
+        }
+
+        // Fallback: Update specific instance by instanceId (original behavior)
+        // Only if instanceId is a valid ObjectId
+        if (instanceId && mongoose.Types.ObjectId.isValid(instanceId)) {
             // Update specific instance in generatedInstances array
             return Class.findOneAndUpdate(
                 {
                     _id: id,
-                    'generatedInstances.instanceId': instanceId
+                    'generatedInstances.instanceId': new mongoose.Types.ObjectId(instanceId)
                 },
                 {
                     $set: {
@@ -79,14 +172,14 @@ export class ClassesRepository {
                 .populate('roomType')
                 .populate('room')
                 .exec();
-        } else {
-            // Update single class status
-            return Class.findByIdAndUpdate(id, { status }, { new: true })
-                .populate('instructor')
-                .populate('roomType')
-                .populate('room')
-                .exec();
         }
+
+        // Update single class status (for classes without generatedInstances)
+        return Class.findByIdAndUpdate(id, { status }, { new: true })
+            .populate('instructor')
+            .populate('roomType')
+            .populate('room')
+            .exec();
     }
 
     /**
@@ -218,7 +311,7 @@ export class ClassesRepository {
     }
 
     /**
-     * Get calendar data for a date range
+     * Get calendar data for a date range - Simplified response
      */
     async getCalendarData(
         startDate: string,
@@ -226,7 +319,7 @@ export class ClassesRepository {
         instructorId?: string,
         roomTypeId?: string,
         roomId?: string
-    ): Promise<Record<string, IClass[]>> {
+    ): Promise<Record<string, any[]>> {
         const start = new Date(startDate);
         const end = new Date(endDate);
 
@@ -264,33 +357,92 @@ export class ClassesRepository {
             .sort({ startDate: 1 })
             .exec();
 
-        // Group by date
-        const calendarData: Record<string, IClass[]> = {};
+        // Simplified calendar response
+        const calendarData: Record<string, any[]> = {};
 
         for (const cls of classes) {
+            // Extract simplified instructor info
+            const instructorInfo = cls.instructor ? {
+                id: (cls.instructor as any)._id?.toString(),
+                name: (cls.instructor as any).fullName || `${(cls.instructor as any).firstName || ''} ${(cls.instructor as any).lastName || ''}`.trim()
+            } : null;
+
+            // Extract simplified room info
+            const roomInfo = cls.room ? {
+                id: (cls.room as any)._id?.toString(),
+                name: (cls.room as any).name
+            } : null;
+
             if (cls.classType === 'single') {
                 // Single class - add once
                 const dateKey = cls.startDate.toISOString().split('T')[0];
                 if (!calendarData[dateKey]) {
                     calendarData[dateKey] = [];
                 }
-                calendarData[dateKey].push(cls);
+                calendarData[dateKey].push({
+                    id: cls._id.toString(),
+                    classId: cls._id.toString(),
+                    name: cls.name,
+                    courseCode: cls.courseCode,
+                    instructor: instructorInfo,
+                    room: roomInfo,
+                    date: dateKey,
+                    startTime: cls.startTime,
+                    endTime: cls.endTime,
+                    classType: cls.classType,
+                    status: cls.status || 'scheduled'
+                });
             } else {
                 // Recurring class - generate instances for each day in range
                 const instances = this.generateRecurringInstances(cls, start, end);
+
+                // Create a lookup for instance statuses
+                const instanceStatusMap: Record<string, string> = {};
+                if (cls.generatedInstances && cls.generatedInstances.length > 0) {
+                    for (const gi of cls.generatedInstances) {
+                        let giDateStr: string = '';
+                        const giDate = gi.date as any;
+                        if (giDate instanceof Date) {
+                            const year = giDate.getFullYear();
+                            const month = String(giDate.getMonth() + 1).padStart(2, '0');
+                            const day = String(giDate.getDate()).padStart(2, '0');
+                            giDateStr = `${year}-${month}-${day}`;
+                        } else if (typeof giDate === 'string') {
+                            giDateStr = giDate.split('T')[0];
+                        }
+                        if (giDateStr) {
+                            instanceStatusMap[giDateStr] = gi.status || 'scheduled';
+                        }
+                    }
+                }
+
                 for (const instance of instances) {
                     const dateKey = instance.date.toISOString().split('T')[0];
                     if (!calendarData[dateKey]) {
                         calendarData[dateKey] = [];
                     }
-                    // Add instance info to class
-                    const classWithInstance = {
-                        ...cls.toObject(),
-                        instanceDate: instance.date,
-                        instanceStartTime: instance.startTime,
-                        instanceEndTime: instance.endTime
-                    };
-                    calendarData[dateKey].push(classWithInstance as any);
+
+                    // Get status from map or default to scheduled
+                    const instanceStatus = instanceStatusMap[dateKey] || 'scheduled';
+
+                    // Generate deterministic instanceId
+                    const instanceId = `${cls._id.toString()}-${dateKey}`;
+
+                    // Add simplified instance info
+                    calendarData[dateKey].push({
+                        id: instanceId,
+                        classId: cls._id.toString(),
+                        name: cls.name,
+                        courseCode: cls.courseCode,
+                        instructor: instructorInfo,
+                        room: roomInfo,
+                        date: dateKey,
+                        startTime: instance.startTime,
+                        endTime: instance.endTime,
+                        classType: cls.classType,
+                        status: instanceStatus,
+                        instanceId: instanceId
+                    });
                 }
             }
         }

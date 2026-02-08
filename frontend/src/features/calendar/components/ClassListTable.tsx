@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { CalendarEvent, ClassStatus } from '../types/calendar.types';
 import { calendarApi } from '../api/calendarApi';
 import {
@@ -23,18 +23,24 @@ const STATUS_OPTIONS: { value: ClassStatus; label: string; color: string; icon: 
     { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: <XCircle className="w-4 h-4" /> },
 ];
 
+interface DropdownPosition {
+    top: number;
+    left: number;
+}
+
 export function ClassListTable({ events, onStatusChange }: ClassListTableProps) {
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition>({ top: 0, left: 0 });
+    const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-    const handleStatusChange = useCallback(async (eventId: string, status: ClassStatus) => {
+    const handleStatusChange = useCallback(async (eventId: string, status: ClassStatus, instanceId?: string) => {
         setUpdatingId(eventId);
         try {
-            await calendarApi.updateClassStatus(eventId, { status });
+            await calendarApi.updateClassStatus(eventId, { status, instanceId });
             onStatusChange();
         } catch (error) {
             console.error('Failed to update status:', error);
-        } finally {
             setUpdatingId(null);
             setOpenDropdown(null);
         }
@@ -51,8 +57,39 @@ export function ClassListTable({ events, onStatusChange }: ClassListTableProps) 
         return a.startTime.localeCompare(b.startTime);
     });
 
+    const handleDropdownToggle = useCallback((eventId: string) => {
+        if (openDropdown === eventId) {
+            setOpenDropdown(null);
+        } else {
+            setOpenDropdown(eventId);
+            // Calculate position based on button position
+            const button = buttonRefs.current.get(eventId);
+            if (button) {
+                const rect = button.getBoundingClientRect();
+                setDropdownPosition({
+                    top: rect.bottom + 8,
+                    left: rect.right - 192 // 192px = w-48 (12rem) + right positioning
+                });
+            }
+        }
+    }, [openDropdown]);
+
+    // Update dropdown position when window is resized
+    useEffect(() => {
+        if (openDropdown) {
+            const button = buttonRefs.current.get(openDropdown);
+            if (button) {
+                const rect = button.getBoundingClientRect();
+                setDropdownPosition({
+                    top: rect.bottom + 8,
+                    left: rect.right - 192
+                });
+            }
+        }
+    }, [openDropdown, events.length]);
+
     return (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow overflow-visible min-h-[200px]">
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -128,10 +165,14 @@ export function ClassListTable({ events, onStatusChange }: ClassListTableProps) 
                                             <span className="ml-1">{statusInfo.label}</span>
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <td className="px-6 py-4 text-sm font-medium overflow-visible whitespace-normal">
                                         <div className="relative">
                                             <button
-                                                onClick={() => setOpenDropdown(openDropdown === event.id ? null : event.id)}
+                                                ref={(el) => {
+                                                    if (el) buttonRefs.current.set(event.id, el);
+                                                    else buttonRefs.current.delete(event.id);
+                                                }}
+                                                onClick={() => handleDropdownToggle(event.id)}
                                                 disabled={isUpdating}
                                                 className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                                             >
@@ -144,28 +185,6 @@ export function ClassListTable({ events, onStatusChange }: ClassListTableProps) 
                                                     </>
                                                 )}
                                             </button>
-
-                                            {openDropdown === event.id && (
-                                                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-                                                    <div className="py-1" role="menu">
-                                                        {STATUS_OPTIONS.map((option) => (
-                                                            <button
-                                                                key={option.value}
-                                                                onClick={() => handleStatusChange(event.classId, option.value)}
-                                                                className={`w-full flex items-center px-4 py-2 text-sm text-left hover:bg-gray-100 ${option.value === event.status ? 'bg-blue-50' : ''}`}
-                                                            >
-                                                                <span className={`mr-2 ${option.value === event.status ? 'opacity-100' : 'opacity-0'}`}>
-                                                                    ✓
-                                                                </span>
-                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${option.color}`}>
-                                                                    {option.icon}
-                                                                    <span className="ml-1">{option.label}</span>
-                                                                </span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -183,12 +202,45 @@ export function ClassListTable({ events, onStatusChange }: ClassListTableProps) 
                 </div>
             )}
 
-            {/* Click outside to close dropdown */}
+            {/* Fixed Position Dropdown */}
             {openDropdown && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setOpenDropdown(null)}
-                />
+                <>
+                    <div
+                        className="fixed w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
+                        style={{
+                            top: dropdownPosition.top,
+                            ...(dropdownPosition.left > 0
+                                ? { left: dropdownPosition.left }
+                                : { right: 16 })
+                        }}
+                    >
+                        <div className="py-1" role="menu">
+                            {STATUS_OPTIONS.map((option) => {
+                                const event = events.find(e => e.id === openDropdown);
+                                return (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => event && handleStatusChange(event.id, option.value, event.instanceId)}
+                                        className={`w-full flex items-center px-4 py-2 text-sm text-left hover:bg-gray-100 ${event && option.value === event.status ? 'bg-blue-50' : ''}`}
+                                    >
+                                        <span className={`mr-2 ${event && option.value === event.status ? 'opacity-100' : 'opacity-0'}`}>
+                                            ✓
+                                        </span>
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${option.color}`}>
+                                            {option.icon}
+                                            <span className="ml-1">{option.label}</span>
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    {/* Click outside to close dropdown */}
+                    <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setOpenDropdown(null)}
+                    />
+                </>
             )}
         </div>
     );

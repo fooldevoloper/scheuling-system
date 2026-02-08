@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { CalendarEvent } from '../types/calendar.types';
 import { ClassListTable } from './ClassListTable';
 import {
@@ -20,12 +20,12 @@ import { ChevronLeft, ChevronRight, Calendar, LayoutGrid, Clock } from 'lucide-r
 interface ListViewProps {
     events: CalendarEvent[];
     onStatusChange: () => void;
-    onFetchRange?: (start: string, end: string) => void;
+    onDateChange?: (date: Date) => void;
 }
 
 type ListViewType = 'day' | 'week' | 'month';
 
-export function ListView({ events, onStatusChange, onFetchRange }: ListViewProps) {
+export function ListView({ events, onStatusChange, onDateChange }: ListViewProps) {
     const [viewType, setViewType] = useState<ListViewType>('week');
     const [displayedDate, setDisplayedDate] = useState(new Date());
 
@@ -69,13 +69,6 @@ export function ListView({ events, onStatusChange, onFetchRange }: ListViewProps
         };
     }, [viewType, displayedDate, displayedMonth, displayedMonthEnd, currentWeekRange]);
 
-    // Fetch data when fetchRange changes
-    useEffect(() => {
-        if (onFetchRange) {
-            onFetchRange(fetchRange.start, fetchRange.end);
-        }
-    }, [fetchRange, onFetchRange]);
-
     // Filter events for month view
     const monthEvents = useMemo(() => {
         return events.filter(event => {
@@ -102,32 +95,46 @@ export function ListView({ events, onStatusChange, onFetchRange }: ListViewProps
 
     // Navigation handlers
     const goToPreviousDay = useCallback(() => {
-        setDisplayedDate(subDays(displayedDate, 1));
-    }, [displayedDate]);
+        const newDate = subDays(displayedDate, 1);
+        setDisplayedDate(newDate);
+        onDateChange?.(newDate);
+    }, [displayedDate, onDateChange]);
 
     const goToNextDay = useCallback(() => {
-        setDisplayedDate(addDays(displayedDate, 1));
-    }, [displayedDate]);
+        const newDate = addDays(displayedDate, 1);
+        setDisplayedDate(newDate);
+        onDateChange?.(newDate);
+    }, [displayedDate, onDateChange]);
 
     const goToPreviousWeek = useCallback(() => {
-        setDisplayedDate(subWeeks(displayedDate, 1));
-    }, [displayedDate]);
+        const newDate = subWeeks(displayedDate, 1);
+        setDisplayedDate(newDate);
+        onDateChange?.(newDate);
+    }, [displayedDate, onDateChange]);
 
     const goToNextWeek = useCallback(() => {
-        setDisplayedDate(addWeeks(displayedDate, 1));
-    }, [displayedDate]);
+        const newDate = addWeeks(displayedDate, 1);
+        setDisplayedDate(newDate);
+        onDateChange?.(newDate);
+    }, [displayedDate, onDateChange]);
 
     const goToPreviousMonth = useCallback(() => {
-        setDisplayedDate(subMonths(displayedDate, 1));
-    }, [displayedDate]);
+        const newDate = subMonths(displayedDate, 1);
+        setDisplayedDate(newDate);
+        onDateChange?.(newDate);
+    }, [displayedDate, onDateChange]);
 
     const goToNextMonth = useCallback(() => {
-        setDisplayedDate(addMonths(displayedDate, 1));
-    }, [displayedDate]);
+        const newDate = addMonths(displayedDate, 1);
+        setDisplayedDate(newDate);
+        onDateChange?.(newDate);
+    }, [displayedDate, onDateChange]);
 
     const goToToday = useCallback(() => {
-        setDisplayedDate(new Date());
-    }, []);
+        const newDate = new Date();
+        setDisplayedDate(newDate);
+        onDateChange?.(newDate);
+    }, [onDateChange]);
 
     const handleViewChange = useCallback((newViewType: ListViewType) => {
         setViewType(newViewType);

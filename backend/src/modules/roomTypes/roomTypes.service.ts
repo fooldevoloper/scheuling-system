@@ -64,6 +64,7 @@ export class RoomTypesService {
         // Invalidate cache
         await cacheService.deleteByPattern('roomtypes*');
         await cacheService.invalidateClasses();
+        await cacheService.invalidateCalendar();
 
         return newRoomType;
     }
@@ -82,6 +83,7 @@ export class RoomTypesService {
         await cacheService.deleteByPattern('roomtypes*');
         await cacheService.deleteByPattern('rooms*');
         await cacheService.invalidateClasses();
+        await cacheService.invalidateCalendar();
 
         return updatedRoomType;
     }
@@ -100,6 +102,7 @@ export class RoomTypesService {
         await cacheService.deleteByPattern('roomtypes*');
         await cacheService.deleteByPattern('rooms*');
         await cacheService.invalidateClasses();
+        await cacheService.invalidateCalendar();
 
         return deletedRoomType;
     }

@@ -4,26 +4,26 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
-import { Calendar as CalendarIcon, Clock, Users, MapPin, Loader2, X, LayoutGrid, List, Calendar } from 'lucide-react';
-import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { calendarApi, ExclusionInfo } from '../api/calendarApi';
+import { Calendar as CalendarIcon, Clock, Users, MapPin, Loader2, X, LayoutGrid, List, Calendar, CheckCircle2, XCircle } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { calendarApi } from '../api/calendarApi';
 import type { CalendarEvent, ClassStatus } from '../types/calendar.types';
 import { ListView } from './ListView';
 
+// Simplified calendar API response interface
 interface CalendarApiEvent {
-    _id?: string;
-    id?: string;
-    name?: string;
-    instanceDate?: string;
-    instanceStartTime?: string;
-    instanceEndTime?: string;
-    startTime?: string;
-    endTime?: string;
-    room?: { name?: string; _id?: string };
-    instructor?: { fullName?: string; firstName?: string; lastName?: string };
+    id: string;
+    classId: string;
+    name: string;
     courseCode?: string;
-    classType?: string;
-    status?: string;
+    instructor?: { id?: string; name?: string } | null;
+    room?: { id?: string; name?: string } | null;
+    date: string;
+    startTime: string;
+    endTime: string;
+    classType: string;
+    status: string;
+    instanceId?: string;
 }
 
 type MainView = 'calendar' | 'list';
@@ -39,22 +39,19 @@ export function CalendarPage() {
     const [currentView, setCurrentView] = useState<string>('dayGridMonth');
     const [mainView, setMainView] = useState<MainView>('calendar');
     const [calendarData, setCalendarData] = useState<Record<string, unknown[]> | null>(null);
-    const [exclusionDates, setExclusionDates] = useState<ExclusionInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
     const [currentDateRange, setCurrentDateRange] = useState<{ start: string; end: string } | null>(null);
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [refreshKey, setRefreshKey] = useState(0); // Force refresh when status changes
+    const lastFetchedRange = useRef<{ start: string; end: string } | null>(null);
 
     // Fetch calendar data for a date range
     const fetchCalendarData = useCallback(async (startDate: string, endDate: string) => {
         setIsLoading(true);
         try {
-            const [calendarResponse, exclusionsResponse] = await Promise.all([
-                calendarApi.getCalendarData({ startDate, endDate }),
-                calendarApi.getExclusionDates({ startDate, endDate })
-            ]);
+            const calendarResponse = await calendarApi.getCalendarData({ startDate, endDate });
             setCalendarData(calendarResponse.data as Record<string, unknown[]>);
-            setExclusionDates(exclusionsResponse.data || []);
         } catch (error) {
             console.error('Failed to fetch calendar data:', error);
         } finally {
@@ -62,7 +59,20 @@ export function CalendarPage() {
         }
     }, []);
 
-    // Transform calendar data to CalendarEvent array
+    // Initial data fetch
+    useEffect(() => {
+        const today = new Date();
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        const startStr = format(startOfMonth, 'yyyy-MM-dd');
+        const endStr = format(endOfMonth, 'yyyy-MM-dd');
+
+        setCurrentDateRange({ start: startStr, end: endStr });
+        fetchCalendarData(startStr, endStr);
+    }, [fetchCalendarData]);
+
+    // Transform calendar data to CalendarEvent array - simplified
     const calendarEvents = useMemo(() => {
         if (!calendarData) return [];
 
@@ -73,24 +83,19 @@ export function CalendarPage() {
                 dayEvents.forEach((eventData: unknown) => {
                     const e = eventData as CalendarApiEvent;
 
-                    const instanceDate = e.instanceDate ? parseISO(e.instanceDate) : parseISO(dateKey);
-                    const dateStr = format(instanceDate, 'yyyy-MM-dd');
-
-                    const startTime = e.instanceStartTime || e.startTime || '00:00';
-                    const endTime = e.instanceEndTime || e.endTime || '00:00';
-
                     allEvents.push({
-                        id: `${e._id || e.id || 'event'}-${dateStr}`,
-                        classId: e._id || e.id || '',
-                        title: e.name || 'Class',
-                        date: dateStr,
-                        startTime: startTime,
-                        endTime: endTime,
+                        id: e.id,
+                        classId: e.classId,
+                        title: e.name,
+                        date: e.date,
+                        startTime: e.startTime,
+                        endTime: e.endTime,
                         room: e.room?.name,
-                        instructor: e.instructor?.fullName || (e.instructor ? `${e.instructor.firstName} ${e.instructor.lastName}` : undefined),
+                        instructor: e.instructor?.name || undefined,
                         courseCode: e.courseCode,
-                        classType: e.classType || 'single',
+                        classType: e.classType,
                         status: e.status as ClassStatus,
+                        instanceId: e.instanceId,
                     });
                 });
             }
@@ -115,34 +120,22 @@ export function CalendarPage() {
             textColor: '#ffffff',
         }));
 
-        // Add exclusion dates as background events
-        const exclusionEvents = exclusionDates.map((exclusion, index) => ({
-            id: `exclusion-${index}`,
-            title: '',
-            start: exclusion.date,
-            end: exclusion.date,
-            allDay: true,
-            display: 'background',
-            backgroundColor: '#fee2e2',
-            borderColor: '#fecaca',
-            textColor: '#991b1b',
-            classNames: ['exclusion-event'],
-        }));
-
-        return [...events, ...exclusionEvents];
-    }, [calendarEvents, exclusionDates]);
+        return events;
+    }, [calendarEvents]);
 
     // Get event color based on status
     function getEventColor(event: CalendarEvent): string {
-        if (event.classType === 'recurring') {
-            return '#8b5cf6';
-        }
+        // First check status - if cancelled or completed, show that color
         switch (event.status) {
             case 'completed':
                 return '#22c55e';
             case 'cancelled':
                 return '#ef4444';
             default:
+                // For scheduled events, use class type color
+                if (event.classType === 'recurring') {
+                    return '#8b5cf6';
+                }
                 return '#3b82f6';
         }
     }
@@ -168,11 +161,16 @@ export function CalendarPage() {
             const startStr = format(startDate, 'yyyy-MM-dd');
             const endStr = format(endDate, 'yyyy-MM-dd');
 
-            // Store the date range for refresh
-            setCurrentDateRange({ start: startStr, end: endStr });
+            // Only fetch if date range has actually changed
+            if (lastFetchedRange.current?.start !== startStr || lastFetchedRange.current?.end !== endStr) {
+                lastFetchedRange.current = { start: startStr, end: endStr };
 
-            // Fetch data for the new date range
-            fetchCalendarData(startStr, endStr);
+                // Store the date range for refresh
+                setCurrentDateRange({ start: startStr, end: endStr });
+
+                // Fetch data for the new date range
+                fetchCalendarData(startStr, endStr);
+            }
         }
     }, [fetchCalendarData]);
 
@@ -193,6 +191,10 @@ export function CalendarPage() {
     const handleDateChange = useCallback((date: Date) => {
         setCurrentDate(date);
 
+        // Update currentDateRange for the date
+        const dateStr = format(date, 'yyyy-MM-dd');
+        setCurrentDateRange({ start: dateStr, end: dateStr });
+
         // Also update FullCalendar if in calendar view
         if (mainView === 'calendar' && calendarRef.current) {
             const calendarApi = calendarRef.current.getApi();
@@ -202,35 +204,17 @@ export function CalendarPage() {
         }
     }, [mainView]);
 
-    // Handle fetch range from ListView
-    const handleFetchRange = useCallback((start: string, end: string) => {
-        setCurrentDateRange({ start, end });
-        fetchCalendarData(start, end);
-    }, [fetchCalendarData]);
-
     // Handle status change
     const handleStatusChange = useCallback(() => {
+        // Increment refresh key to force re-render of all views
+        setRefreshKey(prev => prev + 1);
+        // Clear last fetched range to ensure fresh data
+        lastFetchedRange.current = null;
         // Refresh calendar data using stored date range
         if (currentDateRange) {
             fetchCalendarData(currentDateRange.start, currentDateRange.end);
         }
     }, [currentDateRange, fetchCalendarData]);
-
-    // Initial data fetch
-    useEffect(() => {
-        const today = new Date();
-        // For month view (default), fetch from first to last day of current month
-        const startOfMonthDate = startOfMonth(today);
-        const endOfMonthDate = endOfMonth(today);
-
-        const startStr = format(startOfMonthDate, 'yyyy-MM-dd');
-        const endStr = format(endOfMonthDate, 'yyyy-MM-dd');
-
-        // Store initial date range
-        setCurrentDateRange({ start: startStr, end: endStr });
-
-        fetchCalendarData(startStr, endStr);
-    }, [fetchCalendarData]);
 
     return (
         <div className="space-y-6">
@@ -285,6 +269,7 @@ export function CalendarPage() {
                     {/* FullCalendar */}
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                         <FullCalendar
+                            key={refreshKey}
                             ref={calendarRef}
                             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
                             initialView={currentView}
@@ -333,24 +318,25 @@ export function CalendarPage() {
                             <div className="w-3 h-3 rounded bg-purple-500"></div>
                             <span>Recurring</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded bg-red-200"></div>
-                            <span>Excluded Date</span>
-                        </div>
                     </div>
                 </>
             ) : (
                 /* List View */
                 <ListView
+                    key={refreshKey}
                     events={calendarEvents}
                     onStatusChange={handleStatusChange}
-                    onFetchRange={handleFetchRange}
+                    onDateChange={handleDateChange}
                 />
             )}
 
             {/* Event Modal */}
             {selectedEvent && (
-                <EventModal event={selectedEvent} onClose={handleCloseModal} />
+                <EventModal
+                    event={selectedEvent}
+                    onClose={handleCloseModal}
+                    onStatusChange={handleStatusChange}
+                />
             )}
         </div>
     );
@@ -361,13 +347,45 @@ function capitalizeFirst(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// Status options for status change buttons
+const STATUS_OPTIONS: { value: ClassStatus; label: string; color: string; icon: React.ReactNode }[] = [
+    { value: 'scheduled', label: 'Scheduled', color: 'bg-blue-100 text-blue-800', icon: <Clock className="w-4 h-4" /> },
+    { value: 'completed', label: 'Completed', color: 'bg-green-100 text-green-800', icon: <CheckCircle2 className="w-4 h-4" /> },
+    { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: <XCircle className="w-4 h-4" /> },
+];
+
 // Event Modal Component
-function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
+function EventModal({ event, onClose, onStatusChange }: { event: CalendarEvent; onClose: () => void; onStatusChange: () => void }) {
+    const [isUpdating, setIsUpdating] = useState(false);
     const colors = event.classType === 'recurring'
         ? { bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' }
         : { bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' };
 
     const statusColors = event.status ? STATUS_COLORS[event.status] : null;
+
+    const handleStatusChange = async (status: ClassStatus) => {
+        if (isUpdating) return;
+        setIsUpdating(true);
+        try {
+            await calendarApi.updateClassStatus(event.classId, {
+                status,
+                instanceId: event.instanceId
+            });
+            onStatusChange();
+            onClose();
+        } catch (error) {
+            console.error('Failed to update status:', error);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const getStatusInfo = (status?: string) => {
+        if (!status) return STATUS_OPTIONS[0];
+        return STATUS_OPTIONS.find(s => s.value === status) || STATUS_OPTIONS[0];
+    };
+
+    const currentStatusInfo = getStatusInfo(event.status);
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -379,11 +397,10 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
                             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${colors.badge}`}>
                                 {event.classType === 'recurring' ? 'Recurring' : 'Single'}
                             </span>
-                            {event.status && statusColors && (
-                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors.bg} ${statusColors.border} ${statusColors.text}`}>
-                                    {event.status.charAt(0).toUpperCase() + event.status.slice(1).replace('-', ' ')}
-                                </span>
-                            )}
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${currentStatusInfo.color}`}>
+                                {currentStatusInfo.icon}
+                                <span className="ml-1">{currentStatusInfo.label}</span>
+                            </span>
                         </div>
                         <button
                             onClick={onClose}
@@ -454,8 +471,29 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
                     </div>
                 </div>
 
-                {/* Footer */}
+                {/* Status Change Buttons */}
                 <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                    <p className="text-sm font-medium text-gray-700 mb-3">Change Status:</p>
+                    <div className="flex gap-2">
+                        {STATUS_OPTIONS.map((option) => (
+                            <button
+                                key={option.value}
+                                onClick={() => handleStatusChange(option.value)}
+                                disabled={isUpdating || event.status === option.value}
+                                className={`flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${option.value === event.status
+                                    ? option.color + ' cursor-default'
+                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    } disabled:opacity-50`}
+                            >
+                                {option.icon}
+                                <span className="ml-1">{option.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 bg-gray-100 border-t border-gray-200">
                     <button
                         onClick={onClose}
                         className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"

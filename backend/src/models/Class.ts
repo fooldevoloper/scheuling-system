@@ -48,6 +48,9 @@ export interface IClass extends Document {
     startTime: string;
     endTime: string;
 
+    // Status for single classes
+    status?: 'scheduled' | 'completed' | 'cancelled';
+
     // Recurring class specific
     recurrence?: RecurrenceConfig;
     generatedInstances?: GeneratedInstance[];
@@ -119,6 +122,13 @@ const ClassSchema = new Schema<IClass>(
             type: String,
             required: true,
             match: [/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:mm)'],
+        },
+
+        // Status field for single classes
+        status: {
+            type: String,
+            enum: ['scheduled', 'completed', 'cancelled'],
+            default: 'scheduled',
         },
 
         // Recurring class fields
