@@ -1,14 +1,28 @@
 import { useState, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Users, MapPin, Loader2 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addMonths, subMonths, isToday, parseISO, addDays } from 'date-fns';
+import {
+    format,
+    startOfMonth,
+    endOfMonth,
+    startOfWeek,
+    endOfWeek,
+    eachDayOfInterval,
+    isSameDay,
+    addMonths,
+    subMonths,
+    isToday,
+    parseISO,
+} from 'date-fns';
 import { useCalendar } from '@/hooks';
+
+type CalendarView = 'month';
 
 const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 interface CalendarEvent {
     id: string;
     title: string;
-    date: Date;
+    date: string;
     startTime: string;
     endTime: string;
     room?: string;
@@ -19,24 +33,23 @@ interface CalendarEvent {
 
 export function CalendarPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
 
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
     const calendarStart = startOfWeek(monthStart);
     const calendarEnd = endOfWeek(monthEnd);
 
-    // Format dates for API call
+    // Fetch calendar data for the current month
     const startDateStr = format(monthStart, 'yyyy-MM-dd');
     const endDateStr = format(monthEnd, 'yyyy-MM-dd');
 
-    // Fetch calendar data from API
     const { data: calendarData, isLoading, error } = useCalendar({
         startDate: startDateStr,
         endDate: endDateStr,
     });
 
-    // Transform API data to calendar events - handle date-keyed object format
+    // Transform API data to calendar events
     const eventsMap = useMemo(() => {
         const map: Record<string, CalendarEvent[]> = {};
 
@@ -62,13 +75,10 @@ export function CalendarPage() {
                         classType?: string;
                     };
 
-                    // Use instanceDate if available, otherwise use the dateKey
-                    const eventDate = e.instanceDate ? parseISO(e.instanceDate) : parseISO(dateKey);
-
                     return {
                         id: e._id || e.id || `${dateKey}-${index}`,
                         title: e.name || 'Class',
-                        date: eventDate,
+                        date: dateKey,
                         startTime: e.instanceStartTime || e.startTime || '00:00',
                         endTime: e.instanceEndTime || e.endTime || '00:00',
                         room: e.room?.name,
@@ -96,6 +106,11 @@ export function CalendarPage() {
 
     const selectedDateEvents = selectedDate ? getEventsForDay(selectedDate) : [];
 
+    // Sort events by start time
+    const sortedEvents = useMemo(() => {
+        return [...selectedDateEvents].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }, [selectedDateEvents]);
+
     // Get event color based on class type
     const getEventColor = (classType: string) => {
         if (classType === 'recurring') {
@@ -108,12 +123,21 @@ export function CalendarPage() {
         setCurrentDate(prev => direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1));
     };
 
+    // Get all events for current month for stats
+    const monthEvents = useMemo(() => {
+        const events: CalendarEvent[] = [];
+        Object.values(eventsMap).forEach(dayEvents => {
+            events.push(...dayEvents);
+        });
+        return events;
+    }, [eventsMap]);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
-                    <p className="text-gray-500">View and manage your class schedule</p>
+                    <p className="text-gray-500">{format(currentDate, 'MMMM yyyy')}</p>
                 </div>
             </div>
 
@@ -173,11 +197,11 @@ export function CalendarPage() {
                                 return (
                                     <div
                                         key={dateKey}
-                                        className={`min-h-[140px] border-b border-r border-gray-100 p-2 transition-colors cursor-pointer hover:bg-gray-50 ${!isCurrentMonth ? 'bg-gray-50' : ''
+                                        className={`min-h-[100px] border-b border-r border-gray-100 p-2 transition-colors cursor-pointer hover:bg-gray-50 ${!isCurrentMonth ? 'bg-gray-50' : ''
                                             } ${isSelected ? 'bg-primary-50 ring-2 ring-primary-500 ring-inset' : ''}`}
                                         onClick={() => setSelectedDate(day)}
                                     >
-                                        <span className={`inline-flex items-center justify-center w-7 h-7 text-sm rounded-full mb-1 ${isCurrentDay
+                                        <span className={`inline-flex items-center justify-center w-6 h-6 text-xs rounded-full mb-1 ${isCurrentDay
                                             ? 'bg-primary-600 text-white font-bold shadow-md'
                                             : isCurrentMonth
                                                 ? 'text-gray-900'
@@ -185,19 +209,19 @@ export function CalendarPage() {
                                             }`}>
                                             {format(day, 'd')}
                                         </span>
-                                        <div className="space-y-1">
-                                            {dayEvents.slice(0, 3).map((event) => (
+                                        <div className="space-y-0.5">
+                                            {dayEvents.slice(0, 2).map((event) => (
                                                 <div
                                                     key={event.id}
-                                                    className={`px-2 py-1 text-xs rounded border ${getEventColor(event.classType)} truncate`}
-                                                    title={`${event.title} (${event.startTime} - ${event.endTime})`}
+                                                    className={`px-1.5 py-0.5 text-xs rounded border ${getEventColor(event.classType)} truncate`}
+                                                    title={`${event.title} (${event.startTime})`}
                                                 >
                                                     <span className="font-medium">{event.startTime}</span> {event.title}
                                                 </div>
                                             ))}
-                                            {dayEvents.length > 3 && (
+                                            {dayEvents.length > 2 && (
                                                 <div className="text-xs text-gray-500 pl-1 font-medium">
-                                                    +{dayEvents.length - 3} more
+                                                    +{dayEvents.length - 2}
                                                 </div>
                                             )}
                                         </div>
@@ -208,15 +232,23 @@ export function CalendarPage() {
                     )}
                 </div>
 
-                {/* Selected Date Events */}
+                {/* Selected Day Events */}
                 <div className="card p-4 h-fit sticky top-4">
-                    <h3 className="font-semibold text-gray-900 mb-4">
-                        {selectedDate ? format(selectedDate, 'EEEE, MMMM d, yyyy') : 'Select a date'}
-                    </h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold text-gray-900">
+                            {selectedDate ? format(selectedDate, 'EEEE, MMM d') : 'Select a date'}
+                        </h3>
+                        {selectedDate && isToday(selectedDate) && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-full">
+                                Today
+                            </span>
+                        )}
+                    </div>
+
                     {selectedDate ? (
-                        selectedDateEvents.length > 0 ? (
+                        sortedEvents.length > 0 ? (
                             <div className="space-y-3">
-                                {selectedDateEvents.map((event) => (
+                                {sortedEvents.map((event) => (
                                     <div
                                         key={event.id}
                                         className={`p-3 rounded-lg border ${getEventColor(event.classType)}`}
@@ -227,7 +259,7 @@ export function CalendarPage() {
                                                 {event.classType === 'recurring' ? 'Recurring' : 'Single'}
                                             </span>
                                         </div>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1">
                                             <div className="flex items-center text-sm text-gray-700">
                                                 <Clock className="w-4 h-4 mr-2 text-gray-500" />
                                                 <span className="font-medium">{event.startTime} - {event.endTime}</span>
@@ -267,23 +299,31 @@ export function CalendarPage() {
                         </div>
                     )}
 
-                    {/* Quick Navigation */}
+                    {/* Month Stats */}
                     <div className="mt-6 pt-4 border-t border-gray-200">
-                        <p className="text-sm font-medium text-gray-700 mb-3">Quick Navigation</p>
+                        <p className="text-sm font-medium text-gray-700 mb-3">This Month</p>
                         <div className="grid grid-cols-2 gap-2">
-                            <button
-                                onClick={() => setCurrentDate(new Date())}
-                                className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                            >
-                                Today
-                            </button>
-                            <button
-                                onClick={() => setSelectedDate(new Date())}
-                                className="px-3 py-2 text-sm bg-primary-100 hover:bg-primary-200 text-primary-700 rounded-lg transition-colors"
-                            >
-                                Go to Today
-                            </button>
+                            <div className="bg-gray-50 rounded-lg p-3 text-center">
+                                <p className="text-xl font-bold text-gray-900">{monthEvents.length}</p>
+                                <p className="text-xs text-gray-500">Total Classes</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3 text-center">
+                                <p className="text-xl font-bold text-gray-900">
+                                    {new Set(Object.keys(eventsMap).filter(k => eventsMap[k].length > 0)).size}
+                                </p>
+                                <p className="text-xs text-gray-500">Active Days</p>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* Quick Navigation */}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                        <button
+                            onClick={() => setCurrentDate(new Date())}
+                            className="w-full px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                        >
+                            Go to Today
+                        </button>
                     </div>
                 </div>
             </div>
