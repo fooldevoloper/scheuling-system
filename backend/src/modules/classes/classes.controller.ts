@@ -4,7 +4,8 @@ import {
     ClassFilters,
     PaginationParams,
     CreateClassDTO,
-    UpdateClassDTO
+    UpdateClassDTO,
+    UpdateClassStatusDTO
 } from './classes.dto';
 import { sendCreated, sendOk, sendNotFoundError, sendConflictError } from '../../shared/utils/responseFormatter';
 
@@ -132,6 +133,28 @@ export class ClassesController {
             }
 
             sendOk(res, 'Class Deleted', 'Class deleted successfully', deletedClass);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * PATCH /api/classes/:id/status
+     * Update class status
+     */
+    async updateStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { id } = req.params;
+            const { instanceId, status } = req.body as UpdateClassStatusDTO;
+
+            const updatedClass = await classesService.updateStatus(id, status, instanceId);
+
+            if (!updatedClass) {
+                sendNotFoundError(res, 'Class', id);
+                return;
+            }
+
+            sendOk(res, 'Status Updated', 'Class status updated successfully', updatedClass);
         } catch (error) {
             next(error);
         }

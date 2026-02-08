@@ -1,6 +1,6 @@
 import mongoose, { PipelineStage } from 'mongoose';
 import { Class, IClass } from '../../models';
-import { ClassFilters, PaginationParams } from './classes.dto';
+import { ClassFilters, PaginationParams, ClassStatus } from './classes.dto';
 
 // ============================================
 // Class Repository - Database Operations Only
@@ -49,6 +49,44 @@ export class ClassesRepository {
      */
     async softDelete(id: string): Promise<IClass | null> {
         return Class.findByIdAndUpdate(id, { isActive: false }, { new: true });
+    }
+
+    /**
+     * Update class status
+     * For single classes: updates the main status
+     * For recurring classes: updates specific instance status if instanceId provided
+     */
+    async updateStatus(
+        id: string,
+        status: ClassStatus,
+        instanceId?: string
+    ): Promise<IClass | null> {
+        if (instanceId) {
+            // Update specific instance in generatedInstances array
+            return Class.findOneAndUpdate(
+                {
+                    _id: id,
+                    'generatedInstances.instanceId': instanceId
+                },
+                {
+                    $set: {
+                        'generatedInstances.$.status': status
+                    }
+                },
+                { new: true }
+            )
+                .populate('instructor')
+                .populate('roomType')
+                .populate('room')
+                .exec();
+        } else {
+            // Update single class status
+            return Class.findByIdAndUpdate(id, { status }, { new: true })
+                .populate('instructor')
+                .populate('roomType')
+                .populate('room')
+                .exec();
+        }
     }
 
     /**

@@ -49,4 +49,10 @@ router.delete('/:id', classesController.deleteClass.bind(classesController));
  */
 router.post('/:id/generate-instances', classesController.generateInstances.bind(classesController));
 
+/**
+ * PATCH /api/classes/:id/status
+ * Update class status
+ */
+router.patch('/:id/status', classesController.updateStatus.bind(classesController));
+
 export default router;

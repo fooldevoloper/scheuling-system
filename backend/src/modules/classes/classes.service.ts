@@ -7,7 +7,8 @@ import {
     PaginationParams,
     CreateClassDTO,
     UpdateClassDTO,
-    ClassListResponse
+    ClassListResponse,
+    ClassStatus
 } from './classes.dto';
 import { IClass } from '../../models';
 import { isTimeBefore, parseDateFromString } from '../../utils/dateUtils';
@@ -144,6 +145,34 @@ export class ClassesService {
         await cacheService.deleteByPattern('schedule:classes:*');
 
         return deletedClass;
+    }
+
+    /**
+     * Update class status
+     */
+    async updateStatus(
+        id: string,
+        status: ClassStatus,
+        instanceId?: string
+    ): Promise<IClass | null> {
+        // Check if class exists
+        const existingClass = await classesRepository.findByIdRaw(id);
+        if (!existingClass) {
+            return null;
+        }
+
+        const updatedClass = await classesRepository.updateStatus(id, status, instanceId);
+
+        if (!updatedClass) {
+            return null;
+        }
+
+        // Invalidate cache
+        await cacheService.delete(`schedule:class:${id}`);
+        await cacheService.invalidateCalendar();
+        await cacheService.deleteByPattern('schedule:classes:*');
+
+        return updatedClass;
     }
 
     /**

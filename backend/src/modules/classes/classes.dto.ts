@@ -122,3 +122,14 @@ export interface ClassListResponse {
 export interface GenerateInstancesDTO {
     generateUntil: string; // ISO date string
 }
+
+// ============================================
+// Update Class Status DTO
+// ============================================
+
+export type ClassStatus = 'scheduled' | 'completed' | 'cancelled';
+
+export interface UpdateClassStatusDTO {
+    instanceId?: string; // For recurring classes - specific instance to update
+    status: ClassStatus;
+}
