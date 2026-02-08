@@ -323,7 +323,6 @@ export function CalendarPage() {
             ) : (
                 /* List View */
                 <ListView
-                    key={refreshKey}
                     events={calendarEvents}
                     onStatusChange={handleStatusChange}
                     onDateChange={handleDateChange}

@@ -34,15 +34,16 @@ export function ClassListTable({ events, onStatusChange }: ClassListTableProps) 
     const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition>({ top: 0, left: 0 });
     const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-    const handleStatusChange = useCallback(async (eventId: string, status: ClassStatus, instanceId?: string) => {
+    const handleStatusChange = useCallback(async (eventId: string, classId: string, status: ClassStatus, instanceId?: string) => {
         setUpdatingId(eventId);
+        setOpenDropdown(null);
         try {
-            await calendarApi.updateClassStatus(eventId, { status, instanceId });
+            await calendarApi.updateClassStatus(classId, { status, instanceId });
             onStatusChange();
         } catch (error) {
             console.error('Failed to update status:', error);
+        } finally {
             setUpdatingId(null);
-            setOpenDropdown(null);
         }
     }, [onStatusChange]);
 
@@ -220,7 +221,7 @@ export function ClassListTable({ events, onStatusChange }: ClassListTableProps) 
                                 return (
                                     <button
                                         key={option.value}
-                                        onClick={() => event && handleStatusChange(event.id, option.value, event.instanceId)}
+                                        onClick={() => event && handleStatusChange(event.id, event.classId, option.value, event.instanceId)}
                                         className={`w-full flex items-center px-4 py-2 text-sm text-left hover:bg-gray-100 ${event && option.value === event.status ? 'bg-blue-50' : ''}`}
                                     >
                                         <span className={`mr-2 ${event && option.value === event.status ? 'opacity-100' : 'opacity-0'}`}>
