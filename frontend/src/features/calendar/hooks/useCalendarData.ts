@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { calendarApi } from '../api/calendarApi';
-import type { CalendarEvent, CalendarData } from '../types/calendar.types';
+import type { CalendarEvent, CalendarData, ClassStatus } from '../types/calendar.types';
 import type { CalendarQueryParams } from '@/types';
 
 interface RawCalendarEvent {
@@ -31,6 +31,7 @@ const transformToCalendarEvents = (data: Record<string, unknown[]>): Record<stri
 
                 return {
                     id: e._id || e.id || `${dateKey}-${index}`,
+                    classId: e._id || e.id || `${dateKey}-${index}`,
                     title: e.name || 'Class',
                     date: dateKey,
                     startTime: e.instanceStartTime || e.startTime || '00:00',
@@ -39,7 +40,7 @@ const transformToCalendarEvents = (data: Record<string, unknown[]>): Record<stri
                     instructor: e.instructor?.fullName || (e.instructor ? `${e.instructor.firstName} ${e.instructor.lastName}` : undefined),
                     courseCode: e.courseCode,
                     classType: e.classType || 'single',
-                    status: e.status,
+                    status: (e.status as ClassStatus) || undefined,
                 };
             });
         }
