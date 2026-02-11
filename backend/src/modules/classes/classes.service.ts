@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 import { classesRepository } from './classes.repository';
 import { cacheService } from '../cache';
-import { ConflictDetector, conflictDetector } from '../conflict';
 import {
     ClassFilters,
     PaginationParams,
